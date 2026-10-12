@@ -19,6 +19,7 @@ forever_module_generate_proto(
         proto/handshake.proto
         proto/events.proto
         proto/control.proto
+        proto/actions.proto
         proto/envelope.proto
     OUT_SOURCES_VAR GENERATED_PROTO_SOURCES
     OUT_HEADERS_VAR GENERATED_PROTO_HEADERS

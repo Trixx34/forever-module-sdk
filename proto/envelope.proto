@@ -5,6 +5,7 @@ package forever_module;
 import "handshake.proto";
 import "events.proto";
 import "control.proto";
+import "actions.proto";
 
 // Top-level message wrapper for every Tier 1 exchange. See doc/module-system/03-phase1-protocol-design.md.
 message Envelope {
@@ -25,5 +26,8 @@ message Envelope {
     ControlRevoked control_revoked = 43;
 
     Shutdown shutdown = 30;
+
+    ActionRequest action_request = 50;
+    ActionReply action_reply = 51;
   }
 }

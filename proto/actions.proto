@@ -1,0 +1,39 @@
+// proto2 for protobuf 2.6.1 compatibility in core (see handshake.proto).
+syntax = "proto2";
+package forever_module;
+
+// Module -> core requests that core carries out on the world thread (doc/module-system: Actions).
+// Core never blocks the module on these: the request is queued, executed on a later world tick, and
+// answered with an ActionReply carrying the same message id. Core re-checks everything it is asked
+// to act on (player online, item still present with the same entry and count); the module's view
+// of the world can be stale by the time the action runs.
+
+// Sells one whole stack of an item the player is carrying. Core pays the item's sell price from its
+// own item template; the module never sets an amount.
+message SellItemAction {
+  optional uint64 player_guid = 1;
+  optional uint64 item_guid = 2;
+  optional uint32 item_entry = 3;  // must match the item found under item_guid
+  optional uint32 count = 4;       // must equal the item's current stack size
+}
+
+// Sends a system message to a player, the same way a GM command reply is shown.
+message SendPlayerMessageAction {
+  optional uint64 player_guid = 1;
+  optional string text = 2;
+}
+
+message ActionRequest {
+  optional uint64 message_id = 1; // correlates with the ActionReply carrying the same id
+  oneof action_payload {
+    SellItemAction sell_item = 10;
+    SendPlayerMessageAction send_message = 11;
+  }
+}
+
+message ActionReply {
+  optional uint64 message_id = 1;
+  optional bool success = 2;
+  optional string reason = 3;        // filled when success is false; for logs, not shown to players
+  optional uint64 copper_gained = 4; // SellItem only: money credited to the player
+}

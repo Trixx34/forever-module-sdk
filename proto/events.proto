@@ -3,7 +3,7 @@ package forever_module;
 
 // Tier 1 event payloads for the v1 hook subset only (doc/module-system/03-phase1-protocol-design.md,
 // "Initial hook subset (v1)"): PlayerScript::OnLogin/OnLogout, AccountScript::OnAccountLogin,
-// WorldScript::OnStartup/OnShutdown, CommandScript. Damage/heal/aura/level/quest hooks are
+// WorldScript::OnStartup/OnShutdown, CommandScript, PlayerScript::OnLootItem. Damage/heal/aura/level/quest hooks are
 // deliberately absent and are added only after the Phase 3 end-to-end walkthrough (doc 03).
 // See doc/module-system/08-forever-bot-migration-gap-analysis.md for the full hook mapping.
 
@@ -13,6 +13,18 @@ message PlayerLoginEvent {
 
 message PlayerLogoutEvent {
   optional uint64 player_guid = 1;
+}
+
+// PlayerScript::OnLootItem, sent after an item from a loot window was stored in the player's bags.
+// sell_price is per item, in copper, from the item template (0 if the item cannot be sold).
+message PlayerItemLootedEvent {
+  optional uint64 player_guid = 1;
+  optional uint64 item_guid = 2;
+  optional uint32 item_entry = 3;
+  optional uint32 count = 4;
+  optional uint32 quality = 5;
+  optional uint32 item_class = 6;
+  optional uint32 sell_price = 7;
 }
 
 message WorldStartupEvent {
@@ -34,6 +46,7 @@ message EventNotify {
     WorldStartupEvent world_startup = 12;
     WorldShutdownEvent world_shutdown = 13;
     AccountLoginEvent account_login = 14;
+    PlayerItemLootedEvent player_item_looted = 15;
   }
 }
 
