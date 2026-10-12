@@ -10,7 +10,7 @@
 // Shutdown() is called or the connection is lost. Heartbeats are sent from an internal thread;
 // registered callbacks run on the thread that called Run().
 //
-// Not implemented yet: Tier 2 bot actions and bot control (RequestControl/ReleaseControl). Those
+// Not implemented yet: Tier 2 bot actions. Those
 // are later slices; see the CHANGELOG.
 
 #include <atomic>
@@ -57,12 +57,6 @@ struct NegotiatedBounds {
     std::uint32_t max_nearby_units = 0;
     std::uint32_t max_actions = 0;
     std::uint32_t tick_interval = 0;
-};
-
-struct ControlResult {
-    bool granted = false;
-    std::uint64_t bot_guid = 0;
-    std::string reason;
 };
 
 class ModuleClient {
@@ -117,8 +111,13 @@ public:
 
     void OnControlRevoked(std::function<void(std::uint64_t botGuid, std::string const& reason)> callback);
 
-    // NOT IMPLEMENTED YET (bot control slice). RequestControl returns granted = false with a reason.
-    ControlResult RequestControl(std::uint64_t botGuid, SpawnParams const& params = {});
+    // Asks core to give this module control of a bot; bot_guid 0 asks core to spawn one with `params`. The
+    // reply arrives asynchronously and onReply runs on the thread that calls Run(). Core refuses requests for
+    // bots another module controls, and requests beyond the max_bots granted at handshake.
+    using ControlCallback = std::function<void(ControlResponse const&)>;
+    std::uint64_t RequestControl(std::uint64_t botGuid, SpawnParams const& params = {}, ControlCallback onReply = nullptr);
+
+    // Gives a bot back to core. No reply. Core also clears the ownership when this module disconnects.
     void ReleaseControl(std::uint64_t botGuid);
 
     // Maps the Tier 2 region granted at handshake. Returns nullptr if none was granted or the attach failed;
@@ -160,6 +159,7 @@ private:
     std::function<void(std::uint64_t, std::string const&)> revokedCallback_;
     std::uint64_t nextActionId_ = 1;
     std::unordered_map<std::uint64_t, ActionCallback> actionCallbacks_;
+    std::unordered_map<std::uint64_t, ControlCallback> controlCallbacks_;
 
     std::atomic<bool> stopping_{false};
     std::uint64_t heartbeatSequence_ = 0;

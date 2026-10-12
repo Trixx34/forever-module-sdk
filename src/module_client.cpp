@@ -398,17 +398,28 @@ void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::strin
     revokedCallback_ = std::move(callback);
 }
 
-ControlResult ModuleClient::RequestControl(std::uint64_t /*botGuid*/, SpawnParams const& /*params*/)
+std::uint64_t ModuleClient::RequestControl(std::uint64_t botGuid, SpawnParams const& params, ControlCallback onReply)
 {
-    // Bot control is a later slice (doc 04 §6). Reported explicitly rather than silently ignored.
-    ControlResult result;
-    result.reason = "bot control is not implemented in this SDK version";
-    return result;
+    std::uint64_t const id = nextActionId_++;
+    Envelope out;
+    out.set_message_id(id);
+    ControlRequest* request = out.mutable_control_request();
+    request->set_bot_guid(botGuid);
+    if (botGuid == 0)
+        *request->mutable_spawn_params() = params;
+
+    if (onReply)
+        controlCallbacks_[id] = std::move(onReply);
+    if (!WriteEnvelope(out))
+        controlCallbacks_.erase(id); // connection is gone; Run() will report it
+    return id;
 }
 
-void ModuleClient::ReleaseControl(std::uint64_t /*botGuid*/)
+void ModuleClient::ReleaseControl(std::uint64_t botGuid)
 {
-    // No-op until bot control is implemented (see RequestControl).
+    Envelope out;
+    out.mutable_release_control()->set_bot_guid(botGuid);
+    WriteEnvelope(out);
 }
 
 Tier2Session* ModuleClient::AttachTier2()
@@ -585,6 +596,19 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
                 actionCallbacks_.erase(it);
                 if (callback)
                     callback(reply);
+            }
+            return true;
+        }
+
+        case Envelope::kControlResponse:
+        {
+            auto it = controlCallbacks_.find(envelope.message_id());
+            if (it != controlCallbacks_.end())
+            {
+                ControlCallback callback = std::move(it->second);
+                controlCallbacks_.erase(it);
+                if (callback)
+                    callback(envelope.control_response());
             }
             return true;
         }
