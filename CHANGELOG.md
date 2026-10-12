@@ -1,5 +1,10 @@
 # Changelog
 
+## Protocol 2
+
+- Tier 2 layout 2: `BotSnapshot::spell_cooldowns` is now `SpellCooldown[]` (spell id and remaining milliseconds).
+  Unused slots have spell id 0.
+
 ## [0.1.0] - unreleased
 
 Phase 1 contract release (wire schema, Tier 2 layout) plus the Tier 1 client. Tier 2 shared memory

@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 1;
+inline constexpr std::uint32_t kTier2LayoutVersion = 2;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -40,6 +40,12 @@ struct NearbyUnit {
     bool is_hostile = false;
 };
 
+// One active spell cooldown of a bot. spell_id 0 marks an unused slot.
+struct SpellCooldown {
+    std::uint32_t spell_id = 0;
+    std::uint32_t remaining_ms = 0;
+};
+
 struct BotSnapshot {
     std::uint64_t guid = 0;
     float pos_x = 0.0f;
@@ -51,7 +57,8 @@ struct BotSnapshot {
     std::uint32_t mana = 0;
     std::uint32_t max_mana = 0;
     std::uint64_t threat_target_guid = 0;
-    std::uint32_t spell_cooldowns[kMaxTrackedCooldowns] = {}; // ms remaining
+    // The bot's active cooldowns, closest to expiring first. Unused slots have spell_id 0.
+    SpellCooldown spell_cooldowns[kMaxTrackedCooldowns] = {};
     std::uint32_t nearby_count = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
