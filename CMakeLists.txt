@@ -47,6 +47,11 @@ target_link_libraries(forever_module_sdk
         Boost::headers # Tier 2 shared memory (boost::interprocess); kept out of the public headers
 )
 
+# The Tier 1 socket code uses Winsock on Windows (module_client.cpp). Consumers inherit this link.
+if(WIN32)
+    target_link_libraries(forever_module_sdk PRIVATE ws2_32)
+endif()
+
 option(FOREVER_MODULE_SDK_BUILD_TESTS "Build and register the SDK tests" ON)
 if(FOREVER_MODULE_SDK_BUILD_TESTS)
     enable_testing()
