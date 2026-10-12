@@ -37,10 +37,14 @@ target_include_directories(forever_module_sdk
         $<INSTALL_INTERFACE:include>
 )
 
+find_package(Boost 1.78 REQUIRED)
+
 target_link_libraries(forever_module_sdk
     PUBLIC
         protobuf::libprotobuf
         Threads::Threads
+    PRIVATE
+        Boost::headers # Tier 2 shared memory (boost::interprocess); kept out of the public headers
 )
 
 option(FOREVER_MODULE_SDK_BUILD_TESTS "Build and register the SDK tests" ON)

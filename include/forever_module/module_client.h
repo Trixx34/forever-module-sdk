@@ -10,7 +10,7 @@
 // Shutdown() is called or the connection is lost. Heartbeats are sent from an internal thread;
 // registered callbacks run on the thread that called Run().
 //
-// Not implemented yet: Tier 2 (AttachTier2) and bot control (RequestControl/ReleaseControl). Those
+// Not implemented yet: Tier 2 bot actions and bot control (RequestControl/ReleaseControl). Those
 // are later slices; see the CHANGELOG.
 
 #include <atomic>
@@ -121,8 +121,10 @@ public:
     ControlResult RequestControl(std::uint64_t botGuid, SpawnParams const& params = {});
     void ReleaseControl(std::uint64_t botGuid);
 
-    // NOT IMPLEMENTED YET (Tier 2 slice). Always returns nullptr.
+    // Maps the Tier 2 region granted at handshake. Returns nullptr if none was granted or the attach failed;
+    // tier2_error() then says why. Bot actions (Tier2Session::PublishActions) are a later slice.
     Tier2Session* AttachTier2();
+    std::string const& tier2_error() const;
 
     // Blocking main loop: reads envelopes, dispatches callbacks, and answers requests. Returns when
     // core sends Shutdown, Shutdown() is called, or the connection is lost.
@@ -145,6 +147,8 @@ private:
 
     std::uint64_t moduleId_ = 0;
     std::string tier2RegionName_;
+    std::unique_ptr<Tier2Session> tier2_;
+    std::string tier2Error_;
     NegotiatedBounds bounds_;
     std::string rejectionReason_;
 

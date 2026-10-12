@@ -128,4 +128,51 @@ static_assert(std::is_standard_layout_v<ActionQueueHeader> && std::is_trivially_
 
 static_assert(sizeof(bool) == 1, "NearbyUnit::is_hostile assumes a 1-byte bool");
 
+// Region arithmetic. Core creates the region with these sizes and the module maps it with the same
+// ones; keep this block identical to the core's ModuleTier2Layout.h copy.
+namespace tier2_detail
+{
+constexpr std::size_t kAlign = alignof(std::max_align_t);
+
+constexpr std::size_t AlignUp(std::size_t value)
+{
+    return (value + kAlign - 1) / kAlign * kAlign;
+}
+} // namespace tier2_detail
+
+// Byte offsets from the start of the region. Snapshot buffers come first, then action buffers.
+constexpr std::size_t Tier2HeaderBytes()
+{
+    return tier2_detail::AlignUp(sizeof(Tier2RegionHeader));
+}
+
+constexpr std::size_t Tier2SnapshotBufferBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits)
+{
+    return tier2_detail::AlignUp(sizeof(WorldTickSnapshotHeader) +
+                                 std::size_t(maxBots) * sizeof(BotSnapshot) +
+                                 std::size_t(maxBots) * maxNearbyUnits * sizeof(NearbyUnit));
+}
+
+constexpr std::size_t Tier2ActionBufferBytes(std::uint32_t maxActions)
+{
+    return tier2_detail::AlignUp(sizeof(ActionQueueHeader) + std::size_t(maxActions) * sizeof(BotAction));
+}
+
+constexpr std::size_t Tier2RegionBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxActions)
+{
+    return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits) + 2 * Tier2ActionBufferBytes(maxActions);
+}
+
+constexpr std::size_t Tier2SnapshotBufferOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint8_t buffer)
+{
+    return Tier2HeaderBytes() + buffer * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits);
+}
+
+constexpr std::size_t Tier2ActionBufferOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxActions,
+                                              std::uint8_t buffer)
+{
+    return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits) +
+           buffer * Tier2ActionBufferBytes(maxActions);
+}
+
 } // namespace forever_module
