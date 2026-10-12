@@ -10,7 +10,7 @@
 // in-struct arrays here because their length is negotiated per-module at handshake time (see
 // Tier2RegionHeader below) -- they are addressed by offset math from the region header at runtime.
 // This header only declares the fixed-size per-entry shapes; the actual region layout/offset
-// calculation is implementation work for Tier2Session (TODO).
+// calculation is in the helpers at the end of this file, and Tier2Session reads it through them.
 //
 // Any change to these shapes is a breaking change: bump kTier2LayoutVersion, and bump
 // kProtocolVersion (protocol_version.h) as well, since the layout is part of the wire contract.
@@ -54,11 +54,11 @@ struct BotSnapshot {
     std::uint32_t spell_cooldowns[kMaxTrackedCooldowns] = {}; // ms remaining
     std::uint32_t nearby_count = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
-    // offset-addressed using Tier2RegionHeader::max_nearby_units -- TODO: accessor helpers.
+    // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
 
 // WorldTickSnapshot is a conceptual view over the region, not a single fixed struct -- its bots[]
-// array length is max_bots from the header. TODO: provide a typed view/accessor in Tier2Session
+// array length is max_bots from the header. Tier2Session exposes it as WorldTickSnapshotView
 // rather than exposing raw offset math to module authors.
 struct WorldTickSnapshotHeader {
     std::uint64_t tick_number = 0;
@@ -134,7 +134,7 @@ struct Tier2RegionHeader {
     std::atomic<std::uint64_t> published_action_tick{0};
     std::atomic<std::uint8_t> published_action_buffer{0}; // 0 or 1
 
-    // Followed in memory by, each sized from the bounds above (TODO: offset calculation helpers):
+    // Followed in memory by, each sized from the bounds above (offsets: see the helpers below):
     //   WorldTickSnapshotHeader + BotSnapshot[max_bots] + NearbyUnit[max_bots * max_nearby_units], x2 buffers
     //   ActionQueueHeader + BotAction[max_actions], x2 buffers
 };

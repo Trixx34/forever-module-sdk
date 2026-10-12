@@ -10,8 +10,7 @@
 // Shutdown() is called or the connection is lost. Heartbeats are sent from an internal thread;
 // registered callbacks run on the thread that called Run().
 //
-// Not implemented yet: Tier 2 bot actions. Those
-// are later slices; see the CHANGELOG.
+// Tier 2 bot actions are sent with Tier2Session::PublishActions() (see tier2_session.h).
 
 #include <atomic>
 #include <chrono>
