@@ -1,49 +1,56 @@
 #pragma once
 
-// Tier2Session -- the per-tick shared-memory decision loop surface a module author writes
-// against. See doc/module-system/03-phase1-protocol-design.md (Tier 2 section) and
-// doc/module-system/11-sdk-scope.md.
+// Tier2Session -- the module side of the Tier 2 shared-memory region. See doc/module-system/03-phase1-protocol-design.md
+// (Tier 2 section) and doc/module-system/11-sdk-scope.md.
 //
-// SKELETON ONLY: tier2_session.cpp stubs these out. No real boost::interprocess shared-memory
-// attach/read/write yet, no offset math into the region described in tier2_layout.h.
+// Attach() maps the region the core created for this module (named in HandshakeResponse) and checks its layout
+// version. ReadLatestSnapshot() copies the published snapshot. Bot actions (PublishActions) are not implemented yet.
 
 #include <cstdint>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "forever_module/tier2_layout.h"
 
 namespace forever_module {
 
-// Typed, read-only view over the currently-published WorldTickSnapshot for this module's owned
-// bots. Backed by the shared-memory region attached in Tier2Session -- TODO: real offset-based
-// accessors instead of this placeholder owning-copy approach.
+// Typed, owning copy of the currently published WorldTickSnapshot for this module's bots.
 struct WorldTickSnapshotView {
     std::uint64_t tick_number = 0;
-    std::vector<BotSnapshot> bots; // TODO: should be a non-owning view into shared memory, not a copy
+    std::vector<BotSnapshot> bots;
 };
 
 class Tier2Session {
 public:
-    Tier2Session();
+    // Maps the region named `regionName`. Returns nullptr and sets error if the region is missing, too small, or
+    // written with a layout version this SDK does not understand.
+    static std::unique_ptr<Tier2Session> Attach(std::string const& regionName, std::string& error);
+
     ~Tier2Session();
 
     Tier2Session(Tier2Session const&) = delete;
     Tier2Session& operator=(Tier2Session const&) = delete;
 
-    // Non-blocking: returns whichever snapshot buffer is currently published (may be the same one
-    // as the last call if core hasn't written a new one yet per the module's tick_interval).
+    // Bounds the core granted, read from the region header.
+    std::uint32_t MaxBots() const;
+    std::uint32_t MaxNearbyUnits() const;
+    std::uint32_t MaxActions() const;
+    std::uint32_t TickInterval() const;
+
+    // Non-blocking. Returns the most recently published snapshot. If the core publishes while it is copied, the copy
+    // is retried, so the result is always one complete snapshot (possibly the previous one).
     WorldTickSnapshotView const& ReadLatestSnapshot();
 
-    // Writes to this module's unpublished action buffer and flips the atomic publish index.
-    // Non-blocking -- core's tick loop reads whatever is published whenever it gets to it
-    // (doc/module-system/02-phase0-decisions.md §Tier 2 blocking policy: non-blocking,
-    // latest-available).
+    // Not implemented yet (bot-control slice).
     void PublishActions(std::vector<BotAction> const& actions);
 
 private:
-    WorldTickSnapshotView lastSnapshot_;
-    // TODO: boost::interprocess::managed_shared_memory handle, Tier2RegionHeader*, offset
-    // calculations for the bots/nearby/actions flexible arrays.
+    Tier2Session();
+
+    struct Region;
+    std::unique_ptr<Region> _region;
+    WorldTickSnapshotView _lastSnapshot;
 };
 
 } // namespace forever_module

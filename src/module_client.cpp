@@ -1,6 +1,7 @@
 #include "forever_module/module_client.h"
 
 #include "forever_module/protocol_version.h"
+#include "forever_module/tier2_session.h"
 
 #include <array>
 #include <condition_variable>
@@ -412,8 +413,19 @@ void ModuleClient::ReleaseControl(std::uint64_t /*botGuid*/)
 
 Tier2Session* ModuleClient::AttachTier2()
 {
-    // Tier 2 is a later slice.
-    return nullptr;
+    if (tier2RegionName_.empty())
+        return nullptr; // not granted, or the module did not ask for Tier 2
+    if (!tier2_)
+    {
+        tier2Error_.clear();
+        tier2_ = Tier2Session::Attach(tier2RegionName_, tier2Error_);
+    }
+    return tier2_.get();
+}
+
+std::string const& ModuleClient::tier2_error() const
+{
+    return tier2Error_;
 }
 
 void ModuleClient::Run()

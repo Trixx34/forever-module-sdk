@@ -4,3 +4,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 add_executable(tier1_roundtrip_test tier1_roundtrip_test.cpp)
 target_link_libraries(tier1_roundtrip_test PRIVATE forever_module_sdk Boost::system)
 add_test(NAME tier1_roundtrip COMMAND tier1_roundtrip_test)
+
+add_executable(tier2_attach_test tier2_attach_test.cpp)
+target_link_libraries(tier2_attach_test PRIVATE forever_module_sdk Boost::headers)
+add_test(NAME tier2_attach COMMAND tier2_attach_test)
