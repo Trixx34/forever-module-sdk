@@ -1,0 +1,111 @@
+syntax = "proto3";
+package forever_module;
+
+// Tier 1 event payloads. One payload type per ScriptMgr-equivalent hook category exposed to modules.
+// See doc/module-system/09-onaurachange-hook-design.md for the OnAuraChange rationale and
+// doc/module-system/08-forever-bot-migration-gap-analysis.md for the full hook mapping.
+
+message PlayerLoginEvent {
+  uint64 player_guid = 1;
+}
+
+message PlayerLogoutEvent {
+  uint64 player_guid = 1;
+}
+
+message WorldStartupEvent {
+}
+
+message WorldShutdownEvent {
+}
+
+message AccountLoginEvent {
+  uint32 account_id = 1;
+}
+
+// Mirrors the new UnitScript::OnAuraChange hook (doc/module-system/09).
+message AuraChangeEvent {
+  uint64 target_guid = 1;
+  uint32 spell_id = 2;
+  bool applied = 3; // true = applied, false = removed
+}
+
+// Mirrors UnitScript::OnDamage / ModifyMeleeDamage / ModifySpellDamageTaken / ModifyPeriodicDamageAurasTick.
+// damage_kind distinguishes which of the four existing core hooks fired.
+enum DamageKind {
+  DAMAGE_KIND_UNSPECIFIED = 0;
+  DAMAGE_KIND_GENERIC = 1;
+  DAMAGE_KIND_MELEE = 2;
+  DAMAGE_KIND_SPELL = 3;
+  DAMAGE_KIND_PERIODIC = 4;
+}
+
+message UnitDamageEvent {
+  uint64 attacker_guid = 1;
+  uint64 victim_guid = 2;
+  uint32 damage = 3;
+  DamageKind kind = 4;
+  uint32 spell_id = 5; // 0 if not applicable
+}
+
+message UnitHealEvent {
+  uint64 healer_guid = 1;
+  uint64 target_guid = 2;
+  uint32 amount = 3;
+}
+
+message PlayerLevelChangedEvent {
+  uint64 player_guid = 1;
+  uint32 old_level = 2;
+  uint32 new_level = 3;
+}
+
+message QuestStatusChangeEvent {
+  uint64 player_guid = 1;
+  uint32 quest_id = 2;
+  uint32 new_status = 3;
+}
+
+// Fire-and-forget event dispatch (core -> module). Core never blocks on these.
+message EventNotify {
+  string hook_name = 1;
+  oneof event_payload {
+    PlayerLoginEvent player_login = 10;
+    PlayerLogoutEvent player_logout = 11;
+    WorldStartupEvent world_startup = 12;
+    WorldShutdownEvent world_shutdown = 13;
+    AccountLoginEvent account_login = 14;
+    AuraChangeEvent aura_change = 15;
+    UnitDamageEvent unit_damage = 16;
+    UnitHealEvent unit_heal = 17;
+    PlayerLevelChangedEvent level_changed = 18;
+    QuestStatusChangeEvent quest_status_change = 19;
+  }
+}
+
+// Request/reply hooks where core needs a result back (e.g. chat commands).
+// Core blocks on these with a bounded timeout (default 200ms, see doc/module-system/04 §4).
+message CommandRequestPayload {
+  string command_text = 1;
+  uint64 issuer_guid = 2;
+}
+
+message CommandReplyPayload {
+  bool success = 1;
+  string result_text = 2;
+}
+
+message EventRequest {
+  uint64 message_id = 1; // correlates with the EventReply carrying the same id
+  string hook_name = 2;
+  oneof request_payload {
+    CommandRequestPayload command = 10;
+  }
+}
+
+message EventReply {
+  uint64 message_id = 1;
+  oneof reply_payload {
+    CommandReplyPayload command = 10;
+  }
+}
