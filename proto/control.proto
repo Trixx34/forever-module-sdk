@@ -1,4 +1,5 @@
-syntax = "proto3";
+// proto2 for protobuf 2.6.1 compatibility in core (see handshake.proto).
+syntax = "proto2";
 package forever_module;
 
 // Dynamic bot-ownership control messages. See doc/module-system/04-phase2-module-host-design.md §6.
@@ -6,30 +7,30 @@ package forever_module;
 message SpawnParams {
   // Deferred in doc/module-system/04 §Deferred: race/class/level/team fields TBD once bot-spawning
   // requirements are nailed down in the Phase 5 reference module work. Placeholder fields below.
-  uint32 race = 1;
-  uint32 class_id = 2;
-  uint32 level = 3;
-  uint32 team = 4;
+  optional uint32 race = 1;
+  optional uint32 class_id = 2;
+  optional uint32 level = 3;
+  optional uint32 team = 4;
 }
 
 message ControlRequest {
-  uint64 bot_guid = 1; // 0 = "please spawn a new bot and give me control"
-  SpawnParams spawn_params = 2; // only used when bot_guid == 0
+  optional uint64 bot_guid = 1;          // 0 = "please spawn a new bot and give me control"
+  optional SpawnParams spawn_params = 2; // only used when bot_guid == 0
 }
 
 message ControlResponse {
-  bool granted = 1;
-  uint64 bot_guid = 2; // assigned guid if newly spawned
-  string reason = 3;   // populated when granted == false, e.g. "already controlled by module X",
-                        // "character not found" (stale bot_alt entry, see doc/module-system/10 §2)
+  optional bool granted = 1;
+  optional uint64 bot_guid = 2;          // assigned guid if newly spawned
+  optional string reason = 3;            // populated when granted == false, e.g. "already controlled by module X",
+                                         // "character not found" (stale bot_alt entry, see doc/module-system/10 §2)
 }
 
 message ReleaseControl {
-  uint64 bot_guid = 1;
+  optional uint64 bot_guid = 1;
 }
 
 // core -> module notify: bot is no longer controllable (deleted, logged out, GM revoked).
 message ControlRevoked {
-  uint64 bot_guid = 1;
-  string reason = 2;
+  optional uint64 bot_guid = 1;
+  optional string reason = 2;
 }

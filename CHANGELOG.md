@@ -8,6 +8,9 @@ and bot control are not included yet (see "Not yet implemented").
 - Tier 1 client (`ModuleClient`), POSIX only: Unix domain socket transport, 4-byte little-endian
   length-prefixed `Envelope` frames (max 1 MiB), handshake with timeout, config delivery, notify and
   request/reply dispatch, heartbeat thread, and `Shutdown()` callable from another thread.
+- Schema is proto2, not proto3: the core bundles protobuf 2.6.1, which parses only proto2 and has no
+  `map<>`. `ModuleConfig` uses a repeated `ConfigEntry` with the same field number and wire encoding as
+  the proto3 map. The wire format is unchanged, so `protocol_version` stays `"1"`.
 - Tests: `tests/tier1_roundtrip_test.cpp` drives the client against a fake core over the real wire
   format. Covers accept + events + heartbeat + core `Shutdown`, protocol rejection, and module-side
   `Shutdown()`. Run with `ctest` (disable with `-DFOREVER_MODULE_SDK_BUILD_TESTS=OFF`).
