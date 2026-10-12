@@ -1,0 +1,28 @@
+syntax = "proto3";
+package forever_module;
+
+import "handshake.proto";
+import "events.proto";
+import "control.proto";
+
+// Top-level message wrapper for every Tier 1 exchange. See doc/module-system/03-phase1-protocol-design.md.
+message Envelope {
+  uint64 message_id = 1; // correlates EventRequest -> EventReply at the envelope level too
+  oneof payload {
+    HandshakeRequest handshake_request = 10;
+    HandshakeResponse handshake_response = 11;
+    Heartbeat heartbeat = 12;
+    ModuleConfig module_config = 13;
+
+    EventNotify event_notify = 20;
+    EventRequest event_request = 21;
+    EventReply event_reply = 22;
+
+    ControlRequest control_request = 40;
+    ControlResponse control_response = 41;
+    ReleaseControl release_control = 42;
+    ControlRevoked control_revoked = 43;
+
+    Shutdown shutdown = 30;
+  }
+}
