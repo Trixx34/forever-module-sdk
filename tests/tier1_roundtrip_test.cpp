@@ -316,6 +316,165 @@ Failures RunRejectScenario()
     return all;
 }
 
+// Loot + action scenario: core sends a PlayerScript.OnLootItem notify, the module answers it with a
+// SellItem action and, from that action's reply callback, a SendPlayerMessage action. The fake core
+// checks both requests and answers them, then sends Shutdown.
+Failures RunLootScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+
+    std::string const path = SocketPath("loot");
+    ::unlink(path.c_str());
+
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        if (in.payload_case() == Envelope::kHandshakeRequest)
+        {
+            EXPECT_IN(coreFails, in.handshake_request().tier1_hooks_size() == 1);
+            EXPECT_IN(coreFails, in.handshake_request().tier1_hooks(0) == "PlayerScript.OnLootItem");
+        }
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(9);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        out.Clear();
+        out.mutable_module_config(); // empty config: no keys
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        out.Clear();
+        EventNotify* notify = out.mutable_event_notify();
+        notify->set_hook_name("PlayerScript.OnLootItem");
+        PlayerItemLootedEvent* loot = notify->mutable_player_item_looted();
+        loot->set_player_guid(42);
+        loot->set_item_guid(5001);
+        loot->set_item_entry(2589);
+        loot->set_count(3);
+        loot->set_quality(0);
+        loot->set_item_class(7);
+        loot->set_sell_price(20);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        // First action: the sale. Heartbeats may arrive in between; skip them.
+        bool gotSell = false;
+        while (ReadEnvelope(socket, in))
+        {
+            if (in.payload_case() == Envelope::kHeartbeat)
+                continue;
+            gotSell = in.payload_case() == Envelope::kActionRequest && in.action_request().has_sell_item();
+            break;
+        }
+        EXPECT_IN(coreFails, gotSell);
+        std::uint64_t sellId = 0;
+        if (gotSell)
+        {
+            sellId = in.action_request().message_id();
+            SellItemAction const& sell = in.action_request().sell_item();
+            EXPECT_IN(coreFails, in.message_id() == sellId);
+            EXPECT_IN(coreFails, sell.player_guid() == 42);
+            EXPECT_IN(coreFails, sell.item_guid() == 5001);
+            EXPECT_IN(coreFails, sell.item_entry() == 2589);
+            EXPECT_IN(coreFails, sell.count() == 3);
+
+            out.Clear();
+            out.set_message_id(sellId);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(sellId);
+            reply->set_success(true);
+            reply->set_copper_gained(60);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+
+        // Second action: the message, sent from the sell reply callback.
+        bool gotMessage = false;
+        while (ReadEnvelope(socket, in))
+        {
+            if (in.payload_case() == Envelope::kHeartbeat)
+                continue;
+            gotMessage = in.payload_case() == Envelope::kActionRequest && in.action_request().has_send_message();
+            break;
+        }
+        EXPECT_IN(coreFails, gotMessage);
+        if (gotMessage)
+        {
+            std::uint64_t const messageId = in.action_request().message_id();
+            EXPECT_IN(coreFails, messageId != sellId);
+            EXPECT_IN(coreFails, in.action_request().send_message().player_guid() == 42);
+            EXPECT_IN(coreFails, in.action_request().send_message().text() == "sold for 60 copper");
+
+            out.Clear();
+            out.set_message_id(messageId);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(messageId);
+            reply->set_success(true);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "loot-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"PlayerScript.OnLootItem"};
+    manifest.heartbeat_interval = 20ms;
+
+    ModuleClient client(manifest);
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+
+    bool sellReplied = false;
+    bool messageReplied = false;
+    bool messageSucceeded = false;
+    std::uint64_t copperGained = 0;
+
+    client.OnNotify("PlayerScript.OnLootItem", [&](EventNotify const& notify)
+    {
+        PlayerItemLootedEvent const& loot = notify.player_item_looted();
+        if (loot.quality() != 0 || loot.item_class() == 12 || loot.sell_price() == 0)
+            return;
+        client.SellItem(loot.player_guid(), loot.item_guid(), loot.item_entry(), loot.count(),
+                        [&](ActionReply const& reply)
+        {
+            sellReplied = reply.success();
+            copperGained = reply.copper_gained();
+            client.SendPlayerMessage(42, "sold for 60 copper", [&](ActionReply const& message)
+            {
+                messageReplied = true;
+                messageSucceeded = message.success();
+            });
+        });
+    });
+
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, sellReplied);
+    EXPECT_IN(clientFails, copperGained == 60);
+    EXPECT_IN(clientFails, messageReplied);
+    EXPECT_IN(clientFails, messageSucceeded);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 void Report(char const* name, Failures const& fails, int& failedScenarios)
 {
     if (fails.empty())
@@ -337,5 +496,6 @@ int main()
     Report("accept, events, heartbeat, core Shutdown", RunAcceptScenario("accept", true), failedScenarios);
     Report("reject on protocol mismatch", RunRejectScenario(), failedScenarios);
     Report("module-side Shutdown() ends Run()", RunAcceptScenario("shutdown", false), failedScenarios);
+    Report("loot notify answered with sell and message actions", RunLootScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

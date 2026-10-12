@@ -26,6 +26,7 @@
 #include "handshake.pb.h"
 #include "events.pb.h"
 #include "control.pb.h"
+#include "actions.pb.h"
 #include "envelope.pb.h"
 
 namespace forever_module {
@@ -103,6 +104,17 @@ public:
     // not wait for the timeout.
     void OnRequest(std::string const& hookName, std::function<EventReply(EventRequest const&)> callback);
 
+    // Module -> core actions (proto/actions.proto). Core runs them on a later world tick, so the
+    // reply arrives asynchronously: onReply is invoked from Run() when it does. Pass nullptr for
+    // fire-and-forget. Call these from the thread that runs Run() (the notify/request callbacks).
+    using ActionCallback = std::function<void(ActionReply const&)>;
+    std::uint64_t RequestAction(ActionRequest request, ActionCallback onReply = nullptr);
+    // Sells one whole stack of an item the player carries. Core pays the item's sell price itself.
+    std::uint64_t SellItem(std::uint64_t playerGuid, std::uint64_t itemGuid, std::uint32_t itemEntry,
+                           std::uint32_t count, ActionCallback onReply = nullptr);
+    std::uint64_t SendPlayerMessage(std::uint64_t playerGuid, std::string const& text,
+                                    ActionCallback onReply = nullptr);
+
     void OnControlRevoked(std::function<void(std::uint64_t botGuid, std::string const& reason)> callback);
 
     // NOT IMPLEMENTED YET (bot control slice). RequestControl returns granted = false with a reason.
@@ -142,6 +154,8 @@ private:
     std::unordered_map<std::string, std::function<void(EventNotify const&)>> notifyCallbacks_;
     std::unordered_map<std::string, std::function<EventReply(EventRequest const&)>> requestCallbacks_;
     std::function<void(std::uint64_t, std::string const&)> revokedCallback_;
+    std::uint64_t nextActionId_ = 1;
+    std::unordered_map<std::uint64_t, ActionCallback> actionCallbacks_;
 
     std::atomic<bool> stopping_{false};
     std::uint64_t heartbeatSequence_ = 0;

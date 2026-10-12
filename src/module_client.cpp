@@ -215,6 +215,42 @@ void ModuleClient::OnRequest(std::string const& hookName, std::function<EventRep
     requestCallbacks_[hookName] = std::move(callback);
 }
 
+std::uint64_t ModuleClient::RequestAction(ActionRequest request, ActionCallback onReply)
+{
+    std::uint64_t const id = nextActionId_++;
+    request.set_message_id(id);
+    if (onReply)
+        actionCallbacks_[id] = std::move(onReply);
+
+    Envelope out;
+    out.set_message_id(id);
+    *out.mutable_action_request() = request;
+    if (!WriteEnvelope(out))
+        actionCallbacks_.erase(id); // connection is gone; Run() will report it
+    return id;
+}
+
+std::uint64_t ModuleClient::SellItem(std::uint64_t playerGuid, std::uint64_t itemGuid, std::uint32_t itemEntry,
+                                     std::uint32_t count, ActionCallback onReply)
+{
+    ActionRequest request;
+    SellItemAction* sell = request.mutable_sell_item();
+    sell->set_player_guid(playerGuid);
+    sell->set_item_guid(itemGuid);
+    sell->set_item_entry(itemEntry);
+    sell->set_count(count);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::string const& text, ActionCallback onReply)
+{
+    ActionRequest request;
+    SendPlayerMessageAction* message = request.mutable_send_message();
+    message->set_player_guid(playerGuid);
+    message->set_text(text);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::string const&)> callback)
 {
     revokedCallback_ = std::move(callback);
@@ -390,6 +426,20 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
             out.set_message_id(request.message_id());
             *out.mutable_event_reply() = reply;
             WriteEnvelope(out);
+            return true;
+        }
+
+        case Envelope::kActionReply:
+        {
+            ActionReply const& reply = envelope.action_reply();
+            auto it = actionCallbacks_.find(reply.message_id());
+            if (it != actionCallbacks_.end())
+            {
+                ActionCallback callback = std::move(it->second);
+                actionCallbacks_.erase(it);
+                if (callback)
+                    callback(reply);
+            }
             return true;
         }
 
