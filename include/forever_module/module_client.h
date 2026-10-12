@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 #include <unordered_map>
 #include <vector>
 
@@ -132,7 +133,13 @@ public:
     Tier2Session* AttachTier2();
     std::string const& tier2_error() const;
 
-    // Blocking main loop: reads envelopes, dispatches callbacks, and answers requests. Returns when
+    // Calls `callback` on the thread that runs Run(), every `period`, starting `period` after Run() begins. Add timers
+    // before Run(). A timer is how a module acts on its own schedule (for example, a bot ramp): the callback may send
+    // requests, which is only safe on the Run() thread. A timer that is due while the callback runs fires again after it.
+    using TimerCallback = std::function<void()>;
+    void AddTimer(std::chrono::milliseconds period, TimerCallback callback);
+
+    // Blocking main loop: reads envelopes, dispatches callbacks, answers requests and fires timers. Returns when
     // core sends Shutdown, Shutdown() is called, or the connection is lost.
     void Run();
 
@@ -141,8 +148,17 @@ public:
 
 private:
     struct Transport;
+    struct Timer
+    {
+        std::chrono::milliseconds Period;
+        std::chrono::steady_clock::time_point Next;
+        TimerCallback Callback;
+    };
 
     bool ReadEnvelope(Envelope& envelope);
+    std::chrono::milliseconds UntilNextTimer(std::chrono::steady_clock::time_point now) const;
+    void FireDueTimers(std::chrono::steady_clock::time_point now);
+    std::vector<Timer> timers_;
     bool WriteEnvelope(Envelope const& envelope);
     void StartHeartbeat();
     void StopHeartbeat();

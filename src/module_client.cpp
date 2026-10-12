@@ -25,6 +25,9 @@
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif
+#ifndef _WIN32
+#include <sys/select.h>
+#endif
 
 namespace forever_module {
 
@@ -469,6 +472,57 @@ std::string const& ModuleClient::tier2_error() const
     return tier2Error_;
 }
 
+namespace {
+
+// Waits until the socket has data or the timeout passes. Returns false only on timeout; a failed wait reports true, so
+// the read after it sees the failure.
+bool WaitReadable(SocketHandle socket, std::chrono::milliseconds timeout)
+{
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(socket, &readable);
+    timeval wait;
+    wait.tv_sec = static_cast<decltype(wait.tv_sec)>(timeout.count() / 1000);
+    wait.tv_usec = static_cast<decltype(wait.tv_usec)>((timeout.count() % 1000) * 1000);
+#ifdef _WIN32
+    int const ready = ::select(0, &readable, nullptr, nullptr, &wait);
+#else
+    int const ready = ::select(socket + 1, &readable, nullptr, nullptr, &wait);
+#endif
+    return ready != 0;
+}
+
+} // namespace
+
+void ModuleClient::AddTimer(std::chrono::milliseconds period, TimerCallback callback)
+{
+    timers_.push_back(Timer{ period, std::chrono::steady_clock::time_point{}, std::move(callback) });
+}
+
+// The time until the earliest timer, or a long wait when there are none.
+std::chrono::milliseconds ModuleClient::UntilNextTimer(std::chrono::steady_clock::time_point now) const
+{
+    std::chrono::milliseconds wait = std::chrono::hours(1);
+    for (Timer const& timer : timers_)
+    {
+        auto const left = std::chrono::duration_cast<std::chrono::milliseconds>(timer.Next - now);
+        if (left < wait)
+            wait = left;
+    }
+    return wait < std::chrono::milliseconds(0) ? std::chrono::milliseconds(0) : wait;
+}
+
+void ModuleClient::FireDueTimers(std::chrono::steady_clock::time_point now)
+{
+    for (Timer& timer : timers_)
+    {
+        if (now < timer.Next)
+            continue;
+        timer.Next = now + timer.Period;
+        timer.Callback();
+    }
+}
+
 void ModuleClient::Run()
 {
     if (!transport_ || transport_->socket == kInvalidSocket)
@@ -476,11 +530,23 @@ void ModuleClient::Run()
 
     StartHeartbeat();
 
+    auto const start = std::chrono::steady_clock::now();
+    for (Timer& timer : timers_)
+        timer.Next = start + timer.Period;
+
     Envelope envelope;
-    while (!stopping_ && ReadEnvelope(envelope))
+    while (!stopping_)
     {
-        if (!Dispatch(envelope))
+        // With no timers the read simply blocks. With timers, wait for data up to the next timer, then fire the timers.
+        if (!timers_.empty() && !WaitReadable(transport_->socket, UntilNextTimer(std::chrono::steady_clock::now())))
+        {
+            FireDueTimers(std::chrono::steady_clock::now());
+            continue;
+        }
+
+        if (!ReadEnvelope(envelope) || !Dispatch(envelope))
             break;
+        FireDueTimers(std::chrono::steady_clock::now());
     }
 
     StopHeartbeat();
