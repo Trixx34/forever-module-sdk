@@ -393,6 +393,36 @@ std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::str
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::StoreGet(std::string const& key, ActionCallback onReply)
+{
+    ActionRequest request;
+    request.mutable_store_get()->set_key(key);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::StoreSet(std::string const& key, std::string const& value, ActionCallback onReply)
+{
+    ActionRequest request;
+    StoreSetAction* set = request.mutable_store_set();
+    set->set_key(key);
+    set->set_value(value);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::StoreDelete(std::string const& key, ActionCallback onReply)
+{
+    ActionRequest request;
+    request.mutable_store_delete()->set_key(key);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::StoreList(std::string const& prefix, ActionCallback onReply)
+{
+    ActionRequest request;
+    request.mutable_store_list()->set_prefix(prefix);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::string const&)> callback)
 {
     revokedCallback_ = std::move(callback);
