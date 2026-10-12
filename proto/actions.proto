@@ -23,11 +23,34 @@ message SendPlayerMessageAction {
   optional string text = 2;
 }
 
+// Module store (doc 15): rows private to the requesting module, in the world database. The core takes the
+// module from the session, so a request can only reach that module's own rows.
+message StoreGetAction {
+  optional string key = 1;
+}
+
+message StoreSetAction {
+  optional string key = 1;
+  optional bytes value = 2;
+}
+
+message StoreDeleteAction {
+  optional string key = 1;
+}
+
+message StoreListAction {
+  optional string prefix = 1;        // keys starting with this; empty lists all
+}
+
 message ActionRequest {
   optional uint64 message_id = 1; // correlates with the ActionReply carrying the same id
   oneof action_payload {
     SellItemAction sell_item = 10;
     SendPlayerMessageAction send_message = 11;
+    StoreGetAction store_get = 12;
+    StoreSetAction store_set = 13;
+    StoreDeleteAction store_delete = 14;
+    StoreListAction store_list = 15;
   }
 }
 
@@ -36,4 +59,7 @@ message ActionReply {
   optional bool success = 2;
   optional string reason = 3;        // filled when success is false; for logs, not shown to players
   optional uint64 copper_gained = 4; // SellItem only: money credited to the player
+  optional bool found = 5;           // StoreGet: whether the key exists; StoreDelete: whether it existed
+  optional bytes value = 6;          // StoreGet: the stored value when found
+  repeated string keys = 7;          // StoreList: the matching keys, sorted
 }

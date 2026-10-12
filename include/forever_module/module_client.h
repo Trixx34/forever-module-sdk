@@ -108,6 +108,14 @@ public:
     std::uint64_t SendPlayerMessage(std::uint64_t playerGuid, std::string const& text,
                                     ActionCallback onReply = nullptr);
 
+    // Module store (doc 15): key/value rows private to this module, kept in the world database. Replies arrive like
+    // other action replies. StoreGet sets found and value; StoreDelete sets found (the key existed); StoreList fills keys.
+    // Keys are at most 128 characters, values at most 1024 bytes, and a module can hold 1000 rows.
+    std::uint64_t StoreGet(std::string const& key, ActionCallback onReply);
+    std::uint64_t StoreSet(std::string const& key, std::string const& value, ActionCallback onReply = nullptr);
+    std::uint64_t StoreDelete(std::string const& key, ActionCallback onReply = nullptr);
+    std::uint64_t StoreList(std::string const& prefix, ActionCallback onReply);
+
     void OnControlRevoked(std::function<void(std::uint64_t botGuid, std::string const& reason)> callback);
 
     // Asks core to give this module control of a bot; bot_guid 0 asks core to spawn one with `params`. The
