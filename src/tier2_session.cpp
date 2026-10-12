@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstring>
 #include <new>
+#include <span>
 
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
@@ -111,10 +112,23 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
         auto const* bots = reinterpret_cast<BotSnapshot const*>(snapshot + 1);
         _lastSnapshot.bots.assign(bots, bots + count);
 
+        // Nearby units follow the bot array, maxNearby slots for every bot slot the core allotted.
+        auto const* nearby = reinterpret_cast<NearbyUnit const*>(bots + maxBots);
+        _lastSnapshot.max_nearby_units = maxNearby;
+        _lastSnapshot.nearby.assign(nearby, nearby + std::size_t(count) * maxNearby);
+
         if (header.published_snapshot_buffer.load(std::memory_order_acquire) == buffer)
             break;
     }
     return _lastSnapshot;
+}
+
+std::span<NearbyUnit const> WorldTickSnapshotView::NearbyOf(std::size_t botIndex) const
+{
+    if (botIndex >= bots.size())
+        return {};
+    std::size_t const count = std::min<std::size_t>(bots[botIndex].nearby_count, max_nearby_units);
+    return std::span<NearbyUnit const>(nearby.data() + botIndex * max_nearby_units, count);
 }
 
 bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::string& error)

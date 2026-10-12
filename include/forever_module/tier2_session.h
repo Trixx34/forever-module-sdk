@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -18,7 +19,14 @@ namespace forever_module {
 // Typed, owning copy of the currently published WorldTickSnapshot for this module's bots.
 struct WorldTickSnapshotView {
     std::uint64_t tick_number = 0;
-    std::vector<BotSnapshot> bots;
+    std::vector<BotSnapshot> bots; // only the bots this module controls
+
+    // Nearby units for every bot, max_nearby_units slots per bot in bot order. Use NearbyOf() rather than indexing.
+    std::vector<NearbyUnit> nearby;
+    std::uint32_t max_nearby_units = 0;
+
+    // The units near bots[botIndex], up to its nearby_count. Empty if the index is out of range.
+    std::span<NearbyUnit const> NearbyOf(std::size_t botIndex) const;
 };
 
 class Tier2Session {
