@@ -113,7 +113,10 @@ enum class ActionType : std::uint32_t {
     kAttackTarget = 2,
     kFollow = 3,
     kStop = 4,
-    kRest = 5, // spell_id 1 sits down to rest, 0 stands up. Refused while the bot is in combat (M2).
+    kRest = 5,   // spell_id 1 sits down to rest, 0 stands up. Refused while the bot is in combat (M2).
+    kVendor = 6, // services at an NPC within interaction range (M3). spell_id is a bitmask: 1 sell grey items to a vendor,
+                 // 2 repair at a repairman, 4 equip the best gear in the bags. Refused in combat.
+    kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
