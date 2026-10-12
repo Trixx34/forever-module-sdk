@@ -11,6 +11,9 @@ function(forever_module_generate_proto)
     set(multiValueArgs PROTO_FILES)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+    # protoc writes <cpp_out>/<file>.pb.{h,cc} relative to the -I root, so cpp_out is the directory
+    # the generated files land in directly. Headers are included as "forever_module/*.pb.h" via the
+    # generated/ include root that CMakeLists.txt exposes, so the files must sit under generated/forever_module/.
     set(generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/forever_module")
     file(MAKE_DIRECTORY "${generated_dir}")
 
@@ -25,7 +28,7 @@ function(forever_module_generate_proto)
         add_custom_command(
             OUTPUT "${gen_src}" "${gen_hdr}"
             COMMAND protobuf::protoc
-                --cpp_out "${CMAKE_CURRENT_BINARY_DIR}/generated"
+                --cpp_out "${generated_dir}"
                 -I "${CMAKE_CURRENT_SOURCE_DIR}/proto"
                 "${CMAKE_CURRENT_SOURCE_DIR}/${proto_file}"
             DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${proto_file}"

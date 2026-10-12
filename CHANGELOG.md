@@ -1,21 +1,25 @@
 # Changelog
 
-## [0.1.0-skeleton] - unreleased
+## [0.1.0] - unreleased
 
-Initial scaffold. Not a functional release.
+Phase 1 contract release: wire schema and Tier 2 layout only. Client networking and shared-memory
+implementations are not included yet (see "Not yet implemented").
 
-- Full `.proto` schemas for Tier 1 (handshake, events, control, envelope) per the design in the
-  core repo's `doc/module-system/03-phase1-protocol-design.md`, `04-phase2-module-host-design.md`,
-  `09-onaurachange-hook-design.md`.
-- `include/forever_module/tier2_layout.h` — Tier 2 shared-memory POD struct declarations
-  (`Tier2RegionHeader`, `BotSnapshot`, `NearbyUnit`, `BotAction`, `ActionType`) per
-  `doc/module-system/03-phase1-protocol-design.md`.
-- `ModuleClient`/`Tier2Session` public API declared per `doc/module-system/11-sdk-scope.md` —
-  implementation bodies are stubs (`TODO` markers throughout `src/*.cpp`).
-- `protocol_version` (`"1"`) / SDK package version (`"0.1.0-skeleton"`) split established per
+- Tier 1 `.proto` schemas (handshake, events, control, envelope) for the v1 hook subset defined in
+  the core repo's `doc/module-system/03-phase1-protocol-design.md`.
+  - `HandshakeRequest.sdk_package_version` (informational) and `HandshakeResponse.negotiated_max_*`
+    / `negotiated_tick_interval` (the Tier 2 bounds core actually granted).
+  - `events.proto` covers only the v1 hooks: `PlayerScript::OnLogin/OnLogout`,
+    `AccountScript::OnAccountLogin`, `WorldScript::OnStartup/OnShutdown`, `CommandScript`.
+- `include/forever_module/tier2_layout.h` Tier 2 shared-memory POD structs, with explicit
+  `Tier2RegionHeader::layout_version` (`kTier2LayoutVersion = 1`) and compile-time checks that the
+  shared atomics are lock-free and the structs are POD.
+- `protocol_version` (`"1"`) / SDK package version (`"0.1.0"`) split, per
   `doc/module-system/11-sdk-scope.md`.
-- CMake build wiring (`cmake/GenerateProto.cmake`) for protoc codegen at build time.
-- `examples/minimal-module/` — smallest possible module skeleton using this SDK.
+- Build fix: generated protobuf sources are emitted to `generated/forever_module/`, matching the
+  `forever_module/*.pb.h` include paths.
+- `ModuleClient`/`Tier2Session` public API declared; implementation bodies are stubs.
+- `examples/minimal-module/` smallest module skeleton.
 
 ### Not yet implemented
 
@@ -23,5 +27,5 @@ Initial scaffold. Not a functional release.
   callback dispatch).
 - Real `boost::interprocess` Tier 2 shared-memory attach/read/write and offset-addressing
   accessors for the variable-length `bots[]`/`nearby[]`/`actions[]` arrays.
-- `MAX_TRACKED_COOLDOWNS` default value — still open pending a spell-casting test module
+- `MAX_TRACKED_COOLDOWNS` default value, still open pending a spell-casting test module
   (`doc/module-system/07-phase5-reference-module-design.md`).
