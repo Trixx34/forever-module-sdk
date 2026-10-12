@@ -1,4 +1,5 @@
-syntax = "proto3";
+// proto2 for protobuf 2.6.1 compatibility in core (see handshake.proto).
+syntax = "proto2";
 package forever_module;
 
 import "handshake.proto";
@@ -7,7 +8,7 @@ import "control.proto";
 
 // Top-level message wrapper for every Tier 1 exchange. See doc/module-system/03-phase1-protocol-design.md.
 message Envelope {
-  uint64 message_id = 1; // correlates EventRequest -> EventReply at the envelope level too
+  optional uint64 message_id = 1; // correlates EventRequest -> EventReply at the envelope level too
   oneof payload {
     HandshakeRequest handshake_request = 10;
     HandshakeResponse handshake_response = 11;

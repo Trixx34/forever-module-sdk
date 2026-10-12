@@ -156,8 +156,8 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     }
 
     config_.clear();
-    for (auto const& [key, value] : in.module_config().values())
-        config_[key] = value;
+    for (ConfigEntry const& entry : in.module_config().values())
+        config_[entry.key()] = entry.value();
     haveConfig_ = true;
 
     setRecvTimeout(std::chrono::milliseconds(0));
@@ -346,8 +346,8 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
         case Envelope::kModuleConfig:
         {
             config_.clear();
-            for (auto const& [key, value] : envelope.module_config().values())
-                config_[key] = value;
+            for (ConfigEntry const& entry : envelope.module_config().values())
+                config_[entry.key()] = entry.value();
             haveConfig_ = true;
             if (configCallback_)
                 configCallback_(config_);

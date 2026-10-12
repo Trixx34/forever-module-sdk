@@ -1,4 +1,4 @@
-syntax = "proto3";
+syntax = "proto2";
 package forever_module;
 
 // Tier 1 event payloads for the v1 hook subset only (doc/module-system/03-phase1-protocol-design.md,
@@ -8,11 +8,11 @@ package forever_module;
 // See doc/module-system/08-forever-bot-migration-gap-analysis.md for the full hook mapping.
 
 message PlayerLoginEvent {
-  uint64 player_guid = 1;
+  optional uint64 player_guid = 1;
 }
 
 message PlayerLogoutEvent {
-  uint64 player_guid = 1;
+  optional uint64 player_guid = 1;
 }
 
 message WorldStartupEvent {
@@ -22,12 +22,12 @@ message WorldShutdownEvent {
 }
 
 message AccountLoginEvent {
-  uint32 account_id = 1;
+  optional uint32 account_id = 1;
 }
 
 // Fire-and-forget event dispatch (core -> module). Core never blocks on these.
 message EventNotify {
-  string hook_name = 1;
+  optional string hook_name = 1;
   oneof event_payload {
     PlayerLoginEvent player_login = 10;
     PlayerLogoutEvent player_logout = 11;
@@ -40,25 +40,25 @@ message EventNotify {
 // Request/reply hooks where core needs a result back (e.g. chat commands).
 // Core blocks on these with a bounded timeout (default 200ms, see doc/module-system/03 "Notify vs. Request/Reply split").
 message CommandRequestPayload {
-  string command_text = 1;
-  uint64 issuer_guid = 2;
+  optional string command_text = 1;
+  optional uint64 issuer_guid = 2;
 }
 
 message CommandReplyPayload {
-  bool success = 1;
-  string result_text = 2;
+  optional bool success = 1;
+  optional string result_text = 2;
 }
 
 message EventRequest {
-  uint64 message_id = 1; // correlates with the EventReply carrying the same id
-  string hook_name = 2;
+  optional uint64 message_id = 1; // correlates with the EventReply carrying the same id
+  optional string hook_name = 2;
   oneof request_payload {
     CommandRequestPayload command = 10;
   }
 }
 
 message EventReply {
-  uint64 message_id = 1;
+  optional uint64 message_id = 1;
   oneof reply_payload {
     CommandReplyPayload command = 10;
   }

@@ -1,49 +1,58 @@
-syntax = "proto3";
+// proto2 on purpose: core bundles protobuf 2.6.1, which only parses proto2 (no proto3, no map<>).
+// See doc/module-system/03-phase1-protocol-design.md. Field numbers and wire encoding are unchanged
+// from the proto3 draft, so protocol_version stays "1".
+syntax = "proto2";
 package forever_module;
 
 // Core handshake/lifecycle messages (Tier 1). See doc/module-system/03-phase1-protocol-design.md
 // and doc/module-system/11-sdk-scope.md in the core repo for full design rationale.
 
 message HandshakeRequest {
-  string module_name = 1;
-  string module_version = 2;       // module's own semver, informational
-  string protocol_version = 3;     // exact-match gate against core's compiled-in protocol version
-  repeated string tier1_hooks = 4; // e.g. "PlayerScript.OnLogin", "CommandScript"
-  string sdk_package_version = 5;  // informational only (doc 11): which SDK release the module built against
+  optional string module_name = 1;
+  optional string module_version = 2;       // module's own semver, informational
+  optional string protocol_version = 3;     // exact-match gate against core's compiled-in protocol version
+  repeated string tier1_hooks = 4;          // e.g. "PlayerScript.OnLogin", "CommandScript"
+  optional string sdk_package_version = 5;  // informational only (doc 11): which SDK release the module built against
 
-  bool tier2_participates = 10;
-  uint32 requested_max_bots = 11;
-  uint32 requested_max_nearby_units = 12;
-  uint32 requested_max_actions = 13;
-  uint32 requested_tick_interval = 14; // in server ticks
+  optional bool tier2_participates = 10;
+  optional uint32 requested_max_bots = 11;
+  optional uint32 requested_max_nearby_units = 12;
+  optional uint32 requested_max_actions = 13;
+  optional uint32 requested_tick_interval = 14; // in server ticks
 }
 
 message HandshakeResponse {
-  bool accepted = 1;
-  string reason = 2;              // populated when accepted == false
-  uint64 module_id = 3;
-  string tier2_region_name = 4;   // populated when accepted && tier2_participates
+  optional bool accepted = 1;
+  optional string reason = 2;              // populated when accepted == false
+  optional uint64 module_id = 3;
+  optional string tier2_region_name = 4;   // populated when accepted && tier2_participates
 
   // Bounds core actually granted for the Tier 2 region. May be lower than requested. The module
   // must size its view of the region from these values, not from what it requested, or offset
   // math will disagree with core. Only meaningful when accepted && tier2_participates.
-  uint32 negotiated_max_bots = 5;
-  uint32 negotiated_max_nearby_units = 6;
-  uint32 negotiated_max_actions = 7;
-  uint32 negotiated_tick_interval = 8;
+  optional uint32 negotiated_max_bots = 5;
+  optional uint32 negotiated_max_nearby_units = 6;
+  optional uint32 negotiated_max_actions = 7;
+  optional uint32 negotiated_tick_interval = 8;
+}
+
+// One entry of a module's config. Wire-compatible with a proto3 map<string,string> entry.
+message ConfigEntry {
+  optional string key = 1;
+  optional string value = 2;
 }
 
 // Flat key/value config for this module, loaded from modules.d/<name>.conf on the core side
 // (Module.<Name>.* prefix stripped before delivery). Sent once right after a successful handshake,
 // and re-sent in full on any config reload (not a diff).
 message ModuleConfig {
-  map<string, string> values = 1;
+  repeated ConfigEntry values = 1;
 }
 
 message Heartbeat {
-  uint64 sequence = 1;
+  optional uint64 sequence = 1;
 }
 
 message Shutdown {
-  string reason = 1;
+  optional string reason = 1;
 }

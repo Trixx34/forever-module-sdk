@@ -126,7 +126,9 @@ void RunAcceptingCore(stream_protocol::acceptor& acceptor, bool sendShutdownEnve
     EXPECT_IN(fails, WriteEnvelope(socket, out));
 
     out.Clear();
-    (*out.mutable_module_config()->mutable_values())["greeting"] = "hello";
+    ConfigEntry* entry = out.mutable_module_config()->add_values();
+    entry->set_key("greeting");
+    entry->set_value("hello");
     EXPECT_IN(fails, WriteEnvelope(socket, out));
 
     out.Clear();
