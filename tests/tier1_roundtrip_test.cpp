@@ -603,6 +603,76 @@ Failures RunControlScenario()
     return all;
 }
 
+// Fake core for the timer scenario: handshake and an empty config, then 200 ms of silence while the module's timer
+// runs, then Shutdown.
+void RunTimerCore(stream_protocol::acceptor& acceptor, Failures& fails)
+{
+    stream_protocol::socket socket(acceptor.get_executor());
+    acceptor.accept(socket);
+
+    Envelope in;
+    EXPECT_IN(fails, ReadEnvelope(socket, in));
+    EXPECT_IN(fails, in.payload_case() == Envelope::kHandshakeRequest);
+
+    Envelope out;
+    HandshakeResponse* response = out.mutable_handshake_response();
+    response->set_accepted(true);
+    response->set_module_id(9);
+    EXPECT_IN(fails, WriteEnvelope(socket, out));
+
+    out.Clear();
+    out.mutable_module_config();
+    EXPECT_IN(fails, WriteEnvelope(socket, out));
+
+    std::this_thread::sleep_for(200ms);
+
+    out.Clear();
+    out.mutable_shutdown()->set_reason("test");
+    EXPECT_IN(fails, WriteEnvelope(socket, out));
+
+    boost::system::error_code ec;
+    socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+    socket.close(ec);
+}
+
+// A 20 ms timer runs on the thread that calls Run() while the core is silent, and Run() still returns on Shutdown.
+Failures RunTimerScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+
+    std::string const path = SocketPath("timer");
+    ::unlink(path.c_str());
+
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+    std::thread core([&] { RunTimerCore(acceptor, coreFails); });
+
+    ModuleClient client(TestManifest());
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+
+    int fires = 0;
+    bool onRunThread = true;
+    std::thread::id const runThread = std::this_thread::get_id();
+    client.AddTimer(20ms, [&]
+    {
+        ++fires;
+        onRunThread = onRunThread && std::this_thread::get_id() == runThread;
+    });
+
+    client.Run();
+    core.join();
+
+    // 200 ms at 20 ms per fire is about ten fires; allow scheduling slack either way.
+    EXPECT_IN(clientFails, fires >= 5);
+    EXPECT_IN(clientFails, fires <= 20);
+    EXPECT_IN(clientFails, onRunThread);
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 void Report(char const* name, Failures const& fails, int& failedScenarios)
 {
     if (fails.empty())
@@ -626,5 +696,6 @@ int main()
     Report("module-side Shutdown() ends Run()", RunAcceptScenario("shutdown", false), failedScenarios);
     Report("loot notify answered with sell and message actions", RunLootScenario(), failedScenarios);
     Report("control: spawn request, revoke, release", RunControlScenario(), failedScenarios);
+    Report("timer fires on the Run() thread while the core is silent", RunTimerScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }
