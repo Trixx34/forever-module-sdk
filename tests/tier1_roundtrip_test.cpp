@@ -479,6 +479,130 @@ Failures RunLootScenario()
     return all;
 }
 
+// Control scenario: the module asks core to spawn a bot; core grants bot 777, revokes it, and the module
+// releases it back. The fake core checks each message and ends with Shutdown.
+Failures RunControlScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+
+    std::string const path = SocketPath("control");
+    ::unlink(path.c_str());
+
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(10);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        // Spawn request.
+        std::uint64_t requestId = 0;
+        bool gotSpawn = false;
+        while (ReadEnvelope(socket, in))
+        {
+            if (in.payload_case() == Envelope::kHeartbeat)
+                continue;
+            gotSpawn = in.payload_case() == Envelope::kControlRequest;
+            break;
+        }
+        EXPECT_IN(coreFails, gotSpawn);
+        if (gotSpawn)
+        {
+            requestId = in.message_id();
+            EXPECT_IN(coreFails, in.control_request().bot_guid() == 0);
+            EXPECT_IN(coreFails, in.control_request().spawn_params().race() == 1);
+            EXPECT_IN(coreFails, in.control_request().spawn_params().level() == 80);
+
+            out.Clear();
+            out.set_message_id(requestId);
+            out.mutable_control_response()->set_granted(true);
+            out.mutable_control_response()->set_bot_guid(777);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+
+        // Core takes the bot back; the module answers with a release.
+        out.Clear();
+        out.mutable_control_revoked()->set_bot_guid(777);
+        out.mutable_control_revoked()->set_reason("bot deleted");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        bool gotRelease = false;
+        while (ReadEnvelope(socket, in))
+        {
+            if (in.payload_case() == Envelope::kHeartbeat)
+                continue;
+            gotRelease = in.payload_case() == Envelope::kReleaseControl;
+            break;
+        }
+        EXPECT_IN(coreFails, gotRelease);
+        if (gotRelease)
+            EXPECT_IN(coreFails, in.release_control().bot_guid() == 777);
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "control-module";
+    manifest.module_version = "0.0.1";
+    manifest.heartbeat_interval = 20ms;
+
+    ModuleClient client(manifest);
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+
+    bool granted = false;
+    std::uint64_t grantedGuid = 0;
+    bool revoked = false;
+    std::string revokedReason;
+
+    client.OnControlRevoked([&](std::uint64_t botGuid, std::string const& reason)
+    {
+        revoked = botGuid == grantedGuid;
+        revokedReason = reason;
+        client.ReleaseControl(botGuid);
+    });
+
+    SpawnParams params;
+    params.set_race(1);
+    params.set_level(80);
+    client.RequestControl(0, params, [&](ControlResponse const& response)
+    {
+        granted = response.granted();
+        grantedGuid = response.bot_guid();
+    });
+
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, granted);
+    EXPECT_IN(clientFails, grantedGuid == 777);
+    EXPECT_IN(clientFails, revoked);
+    EXPECT_IN(clientFails, revokedReason == "bot deleted");
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 void Report(char const* name, Failures const& fails, int& failedScenarios)
 {
     if (fails.empty())
@@ -501,5 +625,6 @@ int main()
     Report("reject on protocol mismatch", RunRejectScenario(), failedScenarios);
     Report("module-side Shutdown() ends Run()", RunAcceptScenario("shutdown", false), failedScenarios);
     Report("loot notify answered with sell and message actions", RunLootScenario(), failedScenarios);
+    Report("control: spawn request, revoke, release", RunControlScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }
