@@ -16,6 +16,11 @@
 
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <unistd.h>
+
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 namespace forever_module {
 
@@ -67,6 +72,14 @@ ModuleClient::~ModuleClient()
 
 bool ModuleClient::Connect(std::string const& endpoint)
 {
+#ifdef __linux__
+    // Die with the core: if the worldserver crashes or exits, the kernel sends us SIGTERM instead of
+    // leaving this process orphaned (doc/module-system/04 §2). If the core is already gone, we have
+    // been re-parented to init (pid 1) and the signal would never come, so refuse to run.
+    if (::prctl(PR_SET_PDEATHSIG, SIGTERM) != 0 || ::getppid() == 1)
+        return false;
+#endif
+
     // The core may close its end while we are writing (e.g. during a crash or shutdown). Turn the
     // resulting SIGPIPE into an EPIPE error we can handle. This is process-wide, which is acceptable
     // because the module runs as its own process.

@@ -14,7 +14,11 @@
 #include <thread>
 #include <vector>
 
+#include <csignal>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 #include <boost/asio.hpp>
 
@@ -213,6 +217,11 @@ Failures RunAcceptScenario(char const* tag, bool sendShutdownEnvelope)
 
     ModuleClient client(TestManifest());
     EXPECT_IN(clientFails, client.Connect(path));
+#ifdef __linux__
+    int deathSignal = 0;
+    ::prctl(PR_GET_PDEATHSIG, &deathSignal);
+    EXPECT_IN(clientFails, deathSignal == SIGTERM);
+#endif
     EXPECT_IN(clientFails, client.Handshake(2000ms));
     EXPECT_IN(clientFails, client.rejection_reason().empty());
     EXPECT_IN(clientFails, client.module_id() == 7);
