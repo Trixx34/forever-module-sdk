@@ -2,6 +2,9 @@
 
 ## Unreleased (no protocol or layout change)
 
+- `ActionType::kVendor` (6): sell grey items, repair and equip the best gear, at an NPC within interaction range (M3).
+  `spell_id` is a bitmask (1 sell, 2 repair, 4 equip). Old cores refuse it as an unknown type.
+- `ActionType::kTrain` (7): learn the spells the trainer in range teaches this bot now (M4).
 - `ActionType::kRest` (5): sit down to rest (`spell_id` 1) or stand up (`spell_id` 0). Old cores refuse it as an unknown
   action type, so it is additive.
 - `ModuleClient::AddTimer(period, callback)`: periodic callbacks on the thread that runs `Run()`. `Run()` waits with
