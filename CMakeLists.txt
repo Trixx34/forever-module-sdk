@@ -4,9 +4,9 @@ project(forever_module_sdk VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# SKELETON ONLY -- see doc/module-system/11-sdk-scope.md "Open items deferred from this scoping
-# pass" in the core repo: exact Protobuf/Boost minimum versions, header-only-vs-static-lib tradeoff,
-# and CI/release process are all still open and not decided here.
+# Exact Protobuf/Boost minimum versions, header-only-vs-static-lib tradeoff, and CI/release process
+# are still open -- see doc/module-system/11-sdk-scope.md "Open items deferred from this scoping
+# pass" in the core repo (forever-module-sdk's design docs live there, not in this repo).
 
 find_package(Protobuf REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
@@ -32,7 +32,7 @@ add_library(forever_module_sdk STATIC
 target_include_directories(forever_module_sdk
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated/forever_module>
         $<INSTALL_INTERFACE:include>
 )
 

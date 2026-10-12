@@ -9,6 +9,7 @@ message HandshakeRequest {
   string module_version = 2;       // module's own semver, informational
   string protocol_version = 3;     // exact-match gate against core's compiled-in protocol version
   repeated string tier1_hooks = 4; // e.g. "PlayerScript.OnLogin", "CommandScript"
+  string sdk_package_version = 5;  // informational only (doc 11): which SDK release the module built against
 
   bool tier2_participates = 10;
   uint32 requested_max_bots = 11;
@@ -22,6 +23,14 @@ message HandshakeResponse {
   string reason = 2;              // populated when accepted == false
   uint64 module_id = 3;
   string tier2_region_name = 4;   // populated when accepted && tier2_participates
+
+  // Bounds core actually granted for the Tier 2 region. May be lower than requested. The module
+  // must size its view of the region from these values, not from what it requested, or offset
+  // math will disagree with core. Only meaningful when accepted && tier2_participates.
+  uint32 negotiated_max_bots = 5;
+  uint32 negotiated_max_nearby_units = 6;
+  uint32 negotiated_max_actions = 7;
+  uint32 negotiated_tick_interval = 8;
 }
 
 // Flat key/value config for this module, loaded from modules.d/<name>.conf on the core side

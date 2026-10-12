@@ -11,11 +11,20 @@
 // Tier2RegionHeader below) -- they are addressed by offset math from the region header at runtime.
 // This header only declares the fixed-size per-entry shapes; the actual region layout/offset
 // calculation is implementation work for Tier2Session (TODO).
+//
+// Any change to these shapes is a breaking change: bump kTier2LayoutVersion, and bump
+// kProtocolVersion (protocol_version.h) as well, since the layout is part of the wire contract.
 
-#include <cstdint>
 #include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <type_traits>
 
 namespace forever_module {
+
+// Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
+// be detected from the shared memory itself, independent of the Tier 1 handshake.
+inline constexpr std::uint32_t kTier2LayoutVersion = 1;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -81,8 +90,10 @@ struct ActionQueueHeader {
 };
 
 // Lives at the start of the shared-memory region. Bounds are negotiated at handshake
-// (HandshakeRequest.requested_max_*) and fixed for the lifetime of the module's Tier 2 session.
+// (HandshakeResponse.negotiated_max_*, which may be lower than HandshakeRequest.requested_max_*)
+// and fixed for the lifetime of the module's Tier 2 session.
 struct Tier2RegionHeader {
+    std::uint32_t layout_version = kTier2LayoutVersion;
     std::uint32_t max_bots = 0;
     std::uint32_t max_nearby_units = 0;
     std::uint32_t max_actions = 0;
@@ -98,5 +109,23 @@ struct Tier2RegionHeader {
     //   WorldTickSnapshotHeader + BotSnapshot[max_bots] + NearbyUnit[max_bots * max_nearby_units], x2 buffers
     //   ActionQueueHeader + BotAction[max_actions], x2 buffers
 };
+
+// Compile-time checks on the parts of the layout that would silently break across processes.
+// Atomics in shared memory must be lock-free, or the two processes can't safely share them.
+static_assert(std::atomic<std::uint64_t>::is_always_lock_free, "published_*_tick must be lock-free across processes");
+static_assert(std::atomic<std::uint8_t>::is_always_lock_free, "published_*_buffer must be lock-free across processes");
+
+static_assert(std::is_standard_layout_v<NearbyUnit> && std::is_trivially_copyable_v<NearbyUnit>,
+              "NearbyUnit must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<BotSnapshot> && std::is_trivially_copyable_v<BotSnapshot>,
+              "BotSnapshot must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<WorldTickSnapshotHeader> && std::is_trivially_copyable_v<WorldTickSnapshotHeader>,
+              "WorldTickSnapshotHeader must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<BotAction> && std::is_trivially_copyable_v<BotAction>,
+              "BotAction must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<ActionQueueHeader> && std::is_trivially_copyable_v<ActionQueueHeader>,
+              "ActionQueueHeader must be POD for shared-memory use");
+
+static_assert(sizeof(bool) == 1, "NearbyUnit::is_hostile assumes a 1-byte bool");
 
 } // namespace forever_module
