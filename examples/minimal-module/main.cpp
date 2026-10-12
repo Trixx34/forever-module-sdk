@@ -1,7 +1,6 @@
-// Smallest possible module using forever_module_sdk. SKELETON ONLY -- ModuleClient's methods are
-// stubs right now (see src/module_client.cpp in the SDK repo), so this does not actually connect
-// to a core process yet. It exists to show the intended call shape for module authors and as the
-// fork point for the core repo's "Hello Module" walkthrough.
+// Smallest possible module using forever_module_sdk: connects to core, handshakes, and logs when the
+// world starts. It is the fork point for the core repo's "Hello Module" walkthrough. Tier 2 and bot
+// control are not in this SDK version, so this module uses Tier 1 only.
 
 #include <iostream>
 
