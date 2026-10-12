@@ -9,7 +9,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # pass" in the core repo (forever-module-sdk's design docs live there, not in this repo).
 
 find_package(Protobuf REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system)
 find_package(Threads REQUIRED)
 
 include(cmake/GenerateProto.cmake)
@@ -41,7 +40,6 @@ target_include_directories(forever_module_sdk
 target_link_libraries(forever_module_sdk
     PUBLIC
         protobuf::libprotobuf
-        Boost::system
         Threads::Threads
 )
 

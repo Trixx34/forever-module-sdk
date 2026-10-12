@@ -25,6 +25,7 @@ message PlayerItemLootedEvent {
   optional uint32 quality = 5;
   optional uint32 item_class = 6;
   optional uint32 sell_price = 7;
+  optional string item_name = 8;  // default-locale name, for player-facing messages
 }
 
 message WorldStartupEvent {
