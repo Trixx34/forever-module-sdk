@@ -2,8 +2,15 @@
 
 ## [0.1.0] - unreleased
 
-Phase 1 contract release: wire schema and Tier 2 layout only. Client networking and shared-memory
-implementations are not included yet (see "Not yet implemented").
+Phase 1 contract release (wire schema, Tier 2 layout) plus the Tier 1 client. Tier 2 shared memory
+and bot control are not included yet (see "Not yet implemented").
+
+- Tier 1 client (`ModuleClient`), POSIX only: Unix domain socket transport, 4-byte little-endian
+  length-prefixed `Envelope` frames (max 1 MiB), handshake with timeout, config delivery, notify and
+  request/reply dispatch, heartbeat thread, and `Shutdown()` callable from another thread.
+- Tests: `tests/tier1_roundtrip_test.cpp` drives the client against a fake core over the real wire
+  format. Covers accept + events + heartbeat + core `Shutdown`, protocol rejection, and module-side
+  `Shutdown()`. Run with `ctest` (disable with `-DFOREVER_MODULE_SDK_BUILD_TESTS=OFF`).
 
 - Tier 1 `.proto` schemas (handshake, events, control, envelope) for the v1 hook subset defined in
   the core repo's `doc/module-system/03-phase1-protocol-design.md`.

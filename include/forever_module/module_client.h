@@ -1,16 +1,23 @@
 #pragma once
 
 // ModuleClient -- the Tier 1 client surface a module author actually writes against.
-// See doc/module-system/11-sdk-scope.md for the full API scoping rationale.
+// See doc/module-system/03-phase1-protocol-design.md (Tier 1) and 11-sdk-scope.md (API scope).
 //
-// SKELETON ONLY: method bodies in module_client.cpp are stubs. No real boost::asio socket
-// handling, no real protobuf framing yet -- this header defines the shape of the API so module
-// authors (and the reference-bot module, doc/module-system/07) have something to code against
-// while the real networking implementation is built out.
+// Wire framing (Tier 1): each message is a 4-byte little-endian length followed by that many bytes
+// of a serialized forever_module.Envelope. Frames larger than kMaxFrameBytes are a protocol error.
+//
+// Threading: Handshake() and Run() are called from the module's main thread. Run() blocks until
+// Shutdown() is called or the connection is lost. Heartbeats are sent from an internal thread;
+// registered callbacks run on the thread that called Run().
+//
+// Not implemented yet: Tier 2 (AttachTier2) and bot control (RequestControl/ReleaseControl). Those
+// are later slices; see the CHANGELOG.
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -19,10 +26,14 @@
 #include "handshake.pb.h"
 #include "events.pb.h"
 #include "control.pb.h"
+#include "envelope.pb.h"
 
 namespace forever_module {
 
 class Tier2Session;
+
+// Upper bound on a single Tier 1 frame. Guards against a corrupt or hostile length prefix.
+inline constexpr std::uint32_t kMaxFrameBytes = 1024 * 1024;
 
 struct ModuleManifest {
     std::string module_name;
@@ -34,6 +45,17 @@ struct ModuleManifest {
     std::uint32_t requested_max_nearby_units = 0;
     std::uint32_t requested_max_actions = 0;
     std::uint32_t requested_tick_interval = 1;
+
+    // Liveness heartbeat cadence. Core's default is Modules.HeartbeatIntervalMs = 5000 (doc 04).
+    std::chrono::milliseconds heartbeat_interval{5000};
+};
+
+// Bounds core actually granted for Tier 2, valid after a successful Handshake().
+struct NegotiatedBounds {
+    std::uint32_t max_bots = 0;
+    std::uint32_t max_nearby_units = 0;
+    std::uint32_t max_actions = 0;
+    std::uint32_t tick_interval = 0;
 };
 
 struct ControlResult {
@@ -54,8 +76,21 @@ public:
     // spawn time by core's ModuleMgr (doc/module-system/04 §2).
     bool Connect(std::string const& endpoint);
 
+    // Sends HandshakeRequest, waits up to timeout for HandshakeResponse, then for the ModuleConfig
+    // that core sends right after an accept. Returns false if rejected, timed out, or malformed;
+    // rejection_reason() then says why.
     bool Handshake(std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
 
+    // Valid after a successful Handshake().
+    std::uint64_t module_id() const;
+    std::string const& tier2_region_name() const;
+    NegotiatedBounds const& negotiated_bounds() const;
+
+    // Populated when Handshake() returns false after a rejection from core.
+    std::string const& rejection_reason() const;
+
+    // If the config has already arrived during Handshake(), the callback is invoked immediately.
+    // Each delivery is the full current config, not a diff (doc 03 §Config delivery).
     void OnConfig(std::function<void(std::unordered_map<std::string, std::string> const&)> callback);
 
     // Fire-and-forget hooks (core does not wait). hookName matches the manifest's declared
@@ -63,29 +98,55 @@ public:
     void OnNotify(std::string const& hookName, std::function<void(EventNotify const&)> callback);
 
     // Request/reply hooks (core blocks with a bounded timeout for the reply, default 200ms --
-    // doc/module-system/04 §4). Callback must return promptly.
+    // doc/module-system/03 "Notify vs. Request/Reply split"). Callback must return promptly.
+    // If no callback is registered for an incoming request, an empty reply is sent so core does
+    // not wait for the timeout.
     void OnRequest(std::string const& hookName, std::function<EventReply(EventRequest const&)> callback);
 
     void OnControlRevoked(std::function<void(std::uint64_t botGuid, std::string const& reason)> callback);
 
-    // botGuid == 0 requests core to spawn a new bot and grant control of it.
+    // NOT IMPLEMENTED YET (bot control slice). RequestControl returns granted = false with a reason.
     ControlResult RequestControl(std::uint64_t botGuid, SpawnParams const& params = {});
     void ReleaseControl(std::uint64_t botGuid);
 
-    // Only valid after a successful Handshake() where manifest.tier2_participates was granted.
-    // Returns nullptr otherwise.
+    // NOT IMPLEMENTED YET (Tier 2 slice). Always returns nullptr.
     Tier2Session* AttachTier2();
 
-    // Blocking main loop: polls the Tier 1 connection, dispatches heartbeats + registered
-    // callbacks. Returns when Shutdown() is called or the connection is lost.
+    // Blocking main loop: reads envelopes, dispatches callbacks, and answers requests. Returns when
+    // core sends Shutdown, Shutdown() is called, or the connection is lost.
     void Run();
 
+    // Thread-safe. Unblocks Run() and stops the heartbeat thread.
     void Shutdown();
 
 private:
+    struct Transport;
+
+    bool ReadEnvelope(Envelope& envelope);
+    bool WriteEnvelope(Envelope const& envelope);
+    void StartHeartbeat();
+    void StopHeartbeat();
+    bool Dispatch(Envelope const& envelope); // false means stop the Run() loop
+
     ModuleManifest manifest_;
-    // TODO: boost::asio io_context, socket/pipe handle, message_id correlation map, registered
-    // callback tables, owned Tier2Session instance.
+    std::unique_ptr<Transport> transport_;
+
+    std::uint64_t moduleId_ = 0;
+    std::string tier2RegionName_;
+    NegotiatedBounds bounds_;
+    std::string rejectionReason_;
+
+    bool haveConfig_ = false;
+    std::unordered_map<std::string, std::string> config_;
+    std::function<void(std::unordered_map<std::string, std::string> const&)> configCallback_;
+    std::unordered_map<std::string, std::function<void(EventNotify const&)>> notifyCallbacks_;
+    std::unordered_map<std::string, std::function<EventReply(EventRequest const&)>> requestCallbacks_;
+    std::function<void(std::uint64_t, std::string const&)> revokedCallback_;
+
+    std::atomic<bool> stopping_{false};
+    std::uint64_t heartbeatSequence_ = 0;
+    struct HeartbeatState;
+    std::unique_ptr<HeartbeatState> heartbeat_;
 };
 
 } // namespace forever_module

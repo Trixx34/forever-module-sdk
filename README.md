@@ -13,8 +13,9 @@ contract and `11-sdk-scope.md` for this SDK's scope and versioning.
 
 ## Status
 
-**Phase 1 (contract) complete, v0.1.0.** The `.proto` schemas and Tier 2 layout are final for
-protocol `"1"`. `ModuleClient`/`Tier2Session` method bodies are still stubs (see `src/*.cpp`), so
+**Phase 1 (contract) complete, v0.1.0, plus the Tier 1 client.** The `.proto` schemas and Tier 2
+layout are final for protocol `"1"`. `ModuleClient` implements Tier 1 on POSIX (see the CHANGELOG).
+`Tier2Session` and bot control (`RequestControl`/`ReleaseControl`) are still stubs, so
 this release is not yet usable to run a working module.
 
 ## Versioning
