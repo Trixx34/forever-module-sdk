@@ -363,6 +363,7 @@ Failures RunLootScenario()
         loot->set_quality(0);
         loot->set_item_class(7);
         loot->set_sell_price(20);
+        loot->set_item_name("Tattered Cloth");
         EXPECT_IN(coreFails, WriteEnvelope(socket, out));
 
         // First action: the sale. Heartbeats may arrive in between; skip them.
@@ -439,6 +440,7 @@ Failures RunLootScenario()
     EXPECT_IN(clientFails, client.Connect(path));
     EXPECT_IN(clientFails, client.Handshake(2000ms));
 
+    bool lootNameOk = false;
     bool sellReplied = false;
     bool messageReplied = false;
     bool messageSucceeded = false;
@@ -449,6 +451,7 @@ Failures RunLootScenario()
         PlayerItemLootedEvent const& loot = notify.player_item_looted();
         if (loot.quality() != 0 || loot.item_class() == 12 || loot.sell_price() == 0)
             return;
+        lootNameOk = loot.item_name() == "Tattered Cloth";
         client.SellItem(loot.player_guid(), loot.item_guid(), loot.item_entry(), loot.count(),
                         [&](ActionReply const& reply)
         {
@@ -465,6 +468,7 @@ Failures RunLootScenario()
     client.Run();
     core.join();
 
+    EXPECT_IN(clientFails, lootNameOk);
     EXPECT_IN(clientFails, sellReplied);
     EXPECT_IN(clientFails, copperGained == 60);
     EXPECT_IN(clientFails, messageReplied);
