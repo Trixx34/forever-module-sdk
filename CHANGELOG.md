@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased (no protocol or layout change)
+
+- `ModuleClient::AddTimer(period, callback)`: periodic callbacks on the thread that runs `Run()`. `Run()` waits with
+  `select()` up to the next timer when timers are registered, and blocks on the read as before when there are none.
+  Covered by `tier1_roundtrip_test`.
+
 ## Protocol 4
 
 - Tier 2 layout 4: `BotSnapshot::mana`/`max_mana` are `power`/`max_power` (the main resource, see `power_type`). New
