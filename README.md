@@ -4,9 +4,6 @@ SDK for building external, process-isolated modules for the ForeverBots/ForeverM
 TrinityCore fork's module system. Lets developers extend the core (hooks, bot AI, custom
 behavior) from a separate git repository, without modifying core source.
 
-Full design is documented in the core repo (`D:\Private\ForeverModules`, branch `foreverModules`)
-under `doc/module-system/`:
-
 - `00-investigation.md` through `11-sdk-scope.md` — the complete design arc (codebase
   investigation, trust/versioning/build decisions, Tier 1 event-hook + Tier 2 shared-memory
   protocol, core-side module host, build-time discovery, capability approval, reference bot-AI
