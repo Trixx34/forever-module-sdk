@@ -1,5 +1,10 @@
 # Changelog
 
+## Protocol 4
+
+- Tier 2 layout 4: `BotSnapshot::mana`/`max_mana` are `power`/`max_power` (the main resource, see `power_type`). New
+  `BotSnapshot::level` and `power_type`. `NearbyUnit` gains `level`, `elite` and `casting`.
+
 ## Protocol 3
 
 - Tier 2 layout 3: `BotSnapshot` gains combat state (`in_combat`, `target_distance`) and the result of the last action for

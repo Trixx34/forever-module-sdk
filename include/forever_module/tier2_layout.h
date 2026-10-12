@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 3;
+inline constexpr std::uint32_t kTier2LayoutVersion = 4;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -38,6 +38,9 @@ struct NearbyUnit {
     std::uint32_t health = 0;
     std::uint32_t max_health = 0;
     bool is_hostile = false;
+    std::uint32_t level = 0;   // layout 4
+    std::uint8_t elite = 0;    // 1 for an elite creature or boss (layout 4)
+    std::uint8_t casting = 0;  // 1 while the unit is casting a spell (layout 4)
 };
 
 // What happened to a bot's action in the last action set the core applied. Reported in the next snapshot.
@@ -69,8 +72,9 @@ struct BotSnapshot {
     float orientation = 0.0f;
     std::uint32_t health = 0;
     std::uint32_t max_health = 0;
-    std::uint32_t mana = 0;
-    std::uint32_t max_mana = 0;
+    // Power of the bot's main resource: mana, rage or energy, given by power_type (layout 4; was mana in layout 3).
+    std::uint32_t power = 0;
+    std::uint32_t max_power = 0;
     std::uint64_t threat_target_guid = 0;
     // The bot's active cooldowns, closest to expiring first. Unused slots have spell_id 0.
     SpellCooldown spell_cooldowns[kMaxTrackedCooldowns] = {};
@@ -86,6 +90,10 @@ struct BotSnapshot {
     BotActionStatus last_action_status = BotActionStatus::kNone;
     std::uint32_t last_action_spell = 0;
     std::uint32_t last_action_sequence = 0; // counts the actions applied to this bot; a new result has a new sequence
+
+    // Layout 4: the bot's level and the type of its main power (the Powers value: 0 mana, 1 rage, 3 energy).
+    std::uint32_t level = 0;
+    std::uint8_t power_type = 0;
     std::uint32_t nearby_count = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
