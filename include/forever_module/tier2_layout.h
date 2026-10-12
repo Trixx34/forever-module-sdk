@@ -73,11 +73,40 @@ enum class ActionType : std::uint32_t {
     kStop = 4,
 };
 
+// A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
+inline constexpr std::uint64_t kUnitRefCounterMask = 0xFFFFFFFFull;
+inline constexpr std::uint64_t kUnitRefEntryMask = 0xFFFFFFull;
+
+// Packs a unit reference: HighGuid type in bits 56-63, creature/object entry in bits 32-55, counter in bits 0-31.
+// Counters above 32 bits and entries above 24 bits cannot be packed; the core refuses those units. Type 2 is a
+// player (entry 0, counter = the player's database guid). Type 8 is a creature (entry, counter as on the map).
+// A reference of 0 means no unit, or the bot itself for a spell target.
+constexpr std::uint64_t MakeUnitRef(std::uint8_t highType, std::uint32_t entry, std::uint64_t counter)
+{
+    return (std::uint64_t(highType) << 56) | ((std::uint64_t(entry) & kUnitRefEntryMask) << 32) |
+           (counter & kUnitRefCounterMask);
+}
+
+constexpr std::uint8_t UnitRefType(std::uint64_t ref)
+{
+    return std::uint8_t(ref >> 56);
+}
+
+constexpr std::uint32_t UnitRefEntry(std::uint64_t ref)
+{
+    return std::uint32_t((ref >> 32) & kUnitRefEntryMask);
+}
+
+constexpr std::uint64_t UnitRefCounter(std::uint64_t ref)
+{
+    return ref & kUnitRefCounterMask;
+}
+
 struct BotAction {
     std::uint64_t bot_guid = 0;
     ActionType type = ActionType::kStop;
     std::uint32_t spell_id = 0;
-    std::uint64_t target_guid = 0;
+    std::uint64_t target_guid = 0; // unit reference (MakeUnitRef); 0 = self for kCastSpell
     float dest_x = 0.0f;
     float dest_y = 0.0f;
     float dest_z = 0.0f;

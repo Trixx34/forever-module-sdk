@@ -63,6 +63,14 @@ std::unique_ptr<bi::shared_memory_object> CreateRegion(std::string const& name, 
 
 int main()
 {
+    // Unit references pack and unpack without loss inside their field widths.
+    std::uint64_t const creatureRef = MakeUnitRef(8, 1234567, 0x89ABCDEF);
+    CHECK(UnitRefType(creatureRef) == 8);
+    CHECK(UnitRefEntry(creatureRef) == 1234567);
+    CHECK(UnitRefCounter(creatureRef) == 0x89ABCDEF);
+    CHECK(MakeUnitRef(0, 0, 0) == 0);
+    CHECK(UnitRefCounter(MakeUnitRef(2, 0, 0x1FFFFFFFFull)) == 0xFFFFFFFFull); // out of range: masked, not corrupted
+
     std::string const name = "trinity_module_sdk_test_" + std::to_string(::getpid()) + "_tier2";
     std::unique_ptr<bi::mapped_region> mapping;
     auto shm = CreateRegion(name, kTier2LayoutVersion, mapping);
