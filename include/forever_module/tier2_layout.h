@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 2;
+inline constexpr std::uint32_t kTier2LayoutVersion = 3;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -38,6 +38,21 @@ struct NearbyUnit {
     std::uint32_t health = 0;
     std::uint32_t max_health = 0;
     bool is_hostile = false;
+};
+
+// What happened to a bot's action in the last action set the core applied. Reported in the next snapshot.
+enum class BotActionStatus : std::uint8_t {
+    kNone = 0,           // no action was applied for this bot yet
+    kApplied = 1,        // the action was applied (a cast was accepted; it may still fail while it runs)
+    kRefused = 2,        // refused for another reason (see the core log)
+    kUnknownSpell = 3,   // the spell id does not exist
+    kNotKnown = 4,       // the bot has not learned the spell
+    kOutOfRange = 5,
+    kOnCooldown = 6,
+    kNotEnoughPower = 7,
+    kNoLineOfSight = 8,
+    kInvalidTarget = 9,  // no unit for the target reference, or it is not a valid target
+    kNotOnline = 10,     // the bot was not in the world when the action ran
 };
 
 // One active spell cooldown of a bot. spell_id 0 marks an unused slot.
@@ -59,6 +74,18 @@ struct BotSnapshot {
     std::uint64_t threat_target_guid = 0;
     // The bot's active cooldowns, closest to expiring first. Unused slots have spell_id 0.
     SpellCooldown spell_cooldowns[kMaxTrackedCooldowns] = {};
+
+    // Combat state (layout 3). in_combat is 1 while the bot is in combat. target_distance is the distance in yards to
+    // threat_target_guid's unit, or 0 when there is no target or it is not in the snapshot's view.
+    std::uint8_t in_combat = 0;
+    float target_distance = 0.0f;
+
+    // Result of the last action set the core applied for this bot (layout 3): the action type, its status, and the spell
+    // for a cast. A module reads this in the next snapshot to see what happened.
+    std::uint8_t last_action_type = 0;   // ActionType
+    BotActionStatus last_action_status = BotActionStatus::kNone;
+    std::uint32_t last_action_spell = 0;
+    std::uint32_t last_action_sequence = 0; // counts the actions applied to this bot; a new result has a new sequence
     std::uint32_t nearby_count = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().

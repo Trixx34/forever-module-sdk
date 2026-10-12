@@ -1,5 +1,10 @@
 # Changelog
 
+## Protocol 3
+
+- Tier 2 layout 3: `BotSnapshot` gains combat state (`in_combat`, `target_distance`) and the result of the last action for
+  the bot (`last_action_type`, `last_action_status`, `last_action_spell`). `BotActionStatus` lists the statuses.
+
 ## Protocol 2
 
 - Tier 2 layout 2: `BotSnapshot::spell_cooldowns` is now `SpellCooldown[]` (spell id and remaining milliseconds).
