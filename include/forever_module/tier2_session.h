@@ -4,7 +4,7 @@
 // (Tier 2 section) and doc/module-system/11-sdk-scope.md.
 //
 // Attach() maps the region the core created for this module (named in HandshakeResponse) and checks its layout
-// version. ReadLatestSnapshot() copies the published snapshot. Bot actions (PublishActions) are not implemented yet.
+// version. ReadLatestSnapshot() copies the published snapshot. PublishActions() sends this module's bot actions back.
 
 #include <cstdint>
 #include <memory>
@@ -42,8 +42,11 @@ public:
     // is retried, so the result is always one complete snapshot (possibly the previous one).
     WorldTickSnapshotView const& ReadLatestSnapshot();
 
-    // Not implemented yet (bot-control slice).
-    void PublishActions(std::vector<BotAction> const& actions);
+    // Publishes actions for the snapshot most recently returned by ReadLatestSnapshot(); the snapshot's tick number
+    // is sent with them so the core can tell which snapshot they answer. Returns false, with the reason in error, and
+    // publishes nothing if there are more actions than MaxActions() or an action has an unknown type. The core checks
+    // each bot_guid against its own ownership, so an action for a bot this module does not control is dropped there.
+    bool PublishActions(std::vector<BotAction> const& actions, std::string& error);
 
 private:
     Tier2Session();

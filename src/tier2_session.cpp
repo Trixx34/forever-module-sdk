@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
+#include <new>
 
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
@@ -23,6 +25,7 @@ struct Tier2Session::Region
 
     Tier2RegionHeader& Header() const { return *header; }
     std::byte const* Base() const { return static_cast<std::byte const*>(map.get_address()); }
+    std::byte* MutableBase() const { return static_cast<std::byte*>(map.get_address()); }
 };
 
 Tier2Session::Tier2Session() = default;
@@ -114,9 +117,41 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
     return _lastSnapshot;
 }
 
-void Tier2Session::PublishActions(std::vector<BotAction> const& /*actions*/)
+bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::string& error)
 {
-    // TODO (bot-control slice): write into this module's unpublished action buffer, then publish the index and tick.
+    Tier2RegionHeader& header = _region->Header();
+
+    if (actions.size() > header.max_actions)
+    {
+        error = "too many actions: " + std::to_string(actions.size()) + ", the core granted " +
+                std::to_string(header.max_actions);
+        return false;
+    }
+    for (BotAction const& action : actions)
+    {
+        if (static_cast<std::uint32_t>(action.type) > static_cast<std::uint32_t>(ActionType::kStop))
+        {
+            error = "unknown action type " + std::to_string(static_cast<std::uint32_t>(action.type));
+            return false;
+        }
+    }
+
+    // This module is the only writer, so the published index changes only here. Write the buffer the core is not
+    // reading, then publish the tick before the index: a core that sees the new index also sees the new tick.
+    std::uint8_t const published = header.published_action_buffer.load(std::memory_order_acquire);
+    std::uint8_t const target = published ^ 1;
+    std::byte* base = _region->MutableBase() + Tier2ActionBufferOffset(header.max_bots, header.max_nearby_units,
+                                                                        header.max_actions, target);
+
+    auto* queue = new (base) ActionQueueHeader();
+    queue->tick_number = _lastSnapshot.tick_number;
+    queue->action_count = static_cast<std::uint32_t>(actions.size());
+    if (!actions.empty())
+        std::memcpy(static_cast<void*>(queue + 1), actions.data(), actions.size() * sizeof(BotAction));
+
+    header.published_action_tick.store(_lastSnapshot.tick_number, std::memory_order_release);
+    header.published_action_buffer.store(target, std::memory_order_release);
+    return true;
 }
 
 } // namespace forever_module

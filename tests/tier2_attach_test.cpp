@@ -7,8 +7,10 @@
 #include <boost/interprocess/shared_memory_object.hpp>
 
 #include <cstdio>
+#include <cstddef>
 #include <new>
 #include <string>
+#include <vector>
 #include <unistd.h>
 
 namespace bi = boost::interprocess;
@@ -83,6 +85,49 @@ int main()
             CHECK(view.bots[0].guid == 42);
             CHECK(view.bots[0].health == 900);
         }
+
+        // Actions answer the snapshot just read (tick 10). The first publish writes action buffer 1, since buffer 0
+        // is the one published at region creation.
+        BotAction move;
+        move.bot_guid = 42;
+        move.type = ActionType::kMoveTo;
+        move.dest_x = 1.5f;
+        BotAction stop;
+        stop.bot_guid = 42;
+        stop.type = ActionType::kStop;
+
+        auto const* base = static_cast<std::byte const*>(mapping->get_address());
+        auto const* header = reinterpret_cast<Tier2RegionHeader const*>(base);
+        std::string actionError;
+        CHECK(session->PublishActions({move, stop}, actionError));
+        CHECK(header->published_action_buffer.load() == 1);
+        CHECK(header->published_action_tick.load() == 10);
+
+        auto const* queue = reinterpret_cast<ActionQueueHeader const*>(
+            base + Tier2ActionBufferOffset(4, 2, 8, 1));
+        CHECK(queue->tick_number == 10);
+        CHECK(queue->action_count == 2);
+        auto const* sent = reinterpret_cast<BotAction const*>(queue + 1);
+        CHECK(sent[0].bot_guid == 42 && sent[0].type == ActionType::kMoveTo && sent[0].dest_x == 1.5f);
+        CHECK(sent[1].type == ActionType::kStop);
+
+        // The next publish flips back to buffer 0.
+        CHECK(session->PublishActions({stop}, actionError));
+        CHECK(header->published_action_buffer.load() == 0);
+        auto const* queue0 = reinterpret_cast<ActionQueueHeader const*>(
+            base + Tier2ActionBufferOffset(4, 2, 8, 0));
+        CHECK(queue0->action_count == 1);
+
+        // Too many actions, or an unknown type, is refused and the published buffer does not change.
+        std::vector<BotAction> tooMany(9, stop);
+        CHECK(!session->PublishActions(tooMany, actionError));
+        CHECK(actionError.find("too many actions") != std::string::npos);
+        BotAction unknown;
+        unknown.bot_guid = 42;
+        unknown.type = static_cast<ActionType>(99);
+        CHECK(!session->PublishActions({unknown}, actionError));
+        CHECK(actionError.find("unknown action type") != std::string::npos);
+        CHECK(header->published_action_buffer.load() == 0);
     }
 
     // A region written with another layout version is refused, with the reason in the error.
@@ -108,7 +153,7 @@ int main()
 
     if (g_failures == 0)
     {
-        std::printf("PASS  Tier 2 attach and snapshot read\n");
+        std::printf("PASS  Tier 2 attach, snapshot read and action publish\n");
         return 0;
     }
     std::printf("%d check(s) failed\n", g_failures);
