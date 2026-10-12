@@ -121,7 +121,7 @@ public:
     void ReleaseControl(std::uint64_t botGuid);
 
     // Maps the Tier 2 region granted at handshake. Returns nullptr if none was granted or the attach failed;
-    // tier2_error() then says why. Bot actions (Tier2Session::PublishActions) are a later slice.
+    // tier2_error() then says why. Bot actions go through the returned session's PublishActions().
     Tier2Session* AttachTier2();
     std::string const& tier2_error() const;
 
