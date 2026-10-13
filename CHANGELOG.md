@@ -3,8 +3,7 @@
 ## Unreleased: server stats event
 
 - Tier 1 `ServerStatsEvent` (events.proto, `EventNotify.server_stats` field 16), delivered to modules that list the hook
-  `WorldScript.OnStats`: players online, queued sessions, uptime, world update diff (mean, max, ticks), and bot counts by run state,
-  class and level band. Sent every `Modules.Stats.IntervalSec` seconds (off when 0). Additive; an old core refuses the hook name at handshake.
+  `WorldScript.OnStats`: players online, queued sessions, uptime and world update diff (mean, max, ticks). Bot figures are the bots module's to report. Sent every `Modules.Stats.IntervalSec` seconds (off when 0). Additive; an old core refuses the hook name at handshake.
   Protocol version unchanged.
 
 ## Unreleased (no protocol or layout change)
