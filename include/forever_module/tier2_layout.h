@@ -161,6 +161,9 @@ enum class ActionType : std::uint32_t {
                     // Bot.Actions.Teleport is on, and refuses it in combat. A bot in a party enters the party's instance.
     kGrant = 12,    // add the item with entry spell_id to the bot's bags, dest_x items (at least 1) (scenarios). Refused unless the core's
                     // Bot.Actions.Grant is on. Followed by a kVendor equip, it dresses a bot for a test.
+    kAutoGear = 13, // dress the bot for its level (doc 19): the core picks, for each equipment slot, the best item the bot's class can use at
+                    // its level (uncommon quality at most), adds it to the bags and equips it. spell_id bit 1 = a tank (one-hand weapon
+                    // and shield). Refused in combat and unless the core's Bot.Actions.AutoGear is on (default on).
     kQuest = 10, // quest actions at an NPC within interaction range (M5). spell_id = (operation << 24) | quest id, with operation 1 =
                  // accept the quest from a giver, 2 = hand it in at an ender (the core picks the reward item), 3 = abandon it
                  // (no NPC needed). Accept and hand-in are refused in combat.
