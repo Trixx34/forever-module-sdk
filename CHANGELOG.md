@@ -11,6 +11,9 @@
 
 ## Unreleased (no protocol or layout change)
 
+- `ActionType` gains `kSummon` (17), `kRevive` (18) and `kMount` (19); `kLastActionType` is now `kMount`. Chat orders of the bots module; the core refuses
+  them unless `Bot.Chat.Orders.Enabled` is on. `SpawnParams.alt_name`/`owner_guid` and `ControlResponse.race`/`class_id` (alts as bots). Additive.
+
 - Tier 1 hook `PlayerScript.OnChat` with `PlayerChatEvent` (events.proto field 16): the lines a group leader says in party or raid chat to a group that has
   a bot in it, and whispers to a bot. Additive; modules that do not subscribe are unaffected.
 
