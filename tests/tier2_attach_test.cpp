@@ -180,9 +180,15 @@ int main()
         grant.dest_x = 1.0f;
         CHECK(session->PublishActions({grant}, actionError));
 
+        BotAction gear;
+        gear.bot_guid = 42;
+        gear.type = ActionType::kAutoGear;
+        gear.spell_id = 1;
+        CHECK(session->PublishActions({gear}, actionError));
+
         BotAction beyond;
         beyond.bot_guid = 42;
-        beyond.type = static_cast<ActionType>(13);
+        beyond.type = static_cast<ActionType>(14);
         CHECK(!session->PublishActions({beyond}, actionError));
     }
 
