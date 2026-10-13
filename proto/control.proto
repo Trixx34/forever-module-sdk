@@ -18,6 +18,10 @@ message SpawnParams {
   optional float pos_x = 7;
   optional float pos_y = 8;
   optional float pos_z = 9;
+  // An alt: with alt_name set, no character is created; the character with this name, on the account of the player owner_guid (a character
+  // guid counter, who must be online), logs in as a bot. Needs Bot.Alt.Enabled in the core. race and class_id are ignored.
+  optional string alt_name = 10;
+  optional uint64 owner_guid = 11;
 }
 
 message ControlRequest {
@@ -28,6 +32,8 @@ message ControlRequest {
 message ControlResponse {
   optional bool granted = 1;
   optional uint64 bot_guid = 2;          // assigned guid if newly spawned
+  optional uint32 race = 4;              // of the bot, when granted (newly spawned or alt)
+  optional uint32 class_id = 5;
   optional string reason = 3;            // populated when granted == false, e.g. "already controlled by module X",
                                          // "character not found" (stale bot_alt entry, see doc/module-system/10 §2)
 }
