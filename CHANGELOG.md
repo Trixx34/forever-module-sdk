@@ -11,6 +11,9 @@
 
 ## Unreleased (no protocol or layout change)
 
+- Tier 1 hook `PlayerScript.OnChat` with `PlayerChatEvent` (events.proto field 16): the lines a group leader says in party or raid chat to a group that has
+  a bot in it, and whispers to a bot. Additive; modules that do not subscribe are unaffected.
+
 - Tier 1 `ShareQuestItemAction` (actions.proto field 16, `ModuleClient::ShareQuestItem`) and `ActionReply.recipients` (field 8): give a quest
   item a player looted to the party members who still need it. Additive. Old cores answer it as an unknown action.
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.

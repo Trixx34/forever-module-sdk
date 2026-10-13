@@ -3,7 +3,7 @@ package forever_module;
 
 // Tier 1 event payloads for the v1 hook subset only (doc/module-system/03-phase1-protocol-design.md,
 // "Initial hook subset (v1)"): PlayerScript::OnLogin/OnLogout, AccountScript::OnAccountLogin,
-// WorldScript::OnStartup/OnShutdown, CommandScript, PlayerScript::OnLootItem. Damage/heal/aura/level/quest hooks are
+// WorldScript::OnStartup/OnShutdown, CommandScript, PlayerScript::OnLootItem, PlayerScript::OnChat. Damage/heal/aura/level/quest hooks are
 // deliberately absent and are added only after the Phase 3 end-to-end walkthrough (doc 03).
 // See doc/module-system/08-forever-bot-migration-gap-analysis.md for the full hook mapping.
 
@@ -28,6 +28,15 @@ message PlayerItemLootedEvent {
   optional string item_name = 8;  // default-locale name, for player-facing messages
 }
 
+// PlayerScript::OnChat, sent for a line a group leader says in party or raid chat to a group that has a bot in it, and for a whisper to a
+// bot. Other chat is not sent. player_guid and recipient_guid are character guid counters (recipient_guid is the whispered bot, else 0).
+message PlayerChatEvent {
+  optional uint64 player_guid = 1;
+  optional uint32 channel = 2;  // 1 party, 2 raid, 3 whisper
+  optional string text = 3;
+  optional uint64 recipient_guid = 4;
+}
+
 message WorldStartupEvent {
 }
 
@@ -48,6 +57,7 @@ message EventNotify {
     WorldShutdownEvent world_shutdown = 13;
     AccountLoginEvent account_login = 14;
     PlayerItemLootedEvent player_item_looted = 15;
+    PlayerChatEvent player_chat = 16;
   }
 }
 
