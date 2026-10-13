@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (no protocol or layout change)
+
+- `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
+  `PublishActions` accepts every type up to `kLoot`.
+
 ## Layout 7 (M7 hubs, breaking for layout 6 modules)
 
 - `BotSnapshot` gains `map_id`: the map the bot is on, so a module can pick the hubs of that map.
