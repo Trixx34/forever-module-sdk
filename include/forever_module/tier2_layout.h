@@ -192,7 +192,13 @@ enum class ActionType : std::uint32_t {
     kResurrect = 15,     // answer a pending resurrect offer (layout 11). target_guid = the resurrecter's player unit ref (BotSnapshot::resurrect_from);
                          // spell_id 0 accepts, 1 declines.
     kReclaimCorpse = 16, // reclaim the corpse (layout 11): a ghost within the corpse reclaim radius of its corpse, once the reclaim delay is over.
-    kLastActionType = kReclaimCorpse, // the highest valid value; PublishActions refuses anything above it
+    kSummon = 17,        // a chat order (group of the target): put the bot next to the player target_guid names, a spread position given by the index in
+                         // dest_x. Refused for a dead or fighting bot, a speaker who is fighting, an instance involved on another map, or when the bot is
+                         // within 5 yards already. Needs Bot.Chat.Orders.Enabled in the core.
+    kRevive = 18,        // a chat order: resurrect the dead bot (corpse or ghost) at 35% health and put it next to the player target_guid names (as kSummon).
+                         // Refused on a hardcore realm. Needs Bot.Chat.Orders.Enabled.
+    kMount = 19,         // spell_id 1 mounts the bot on its fastest learned ground mount, 0 dismounts it. Refused in combat.
+    kLastActionType = kMount, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
