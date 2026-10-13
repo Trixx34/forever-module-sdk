@@ -166,6 +166,24 @@ int main()
         quest.type = ActionType::kQuest;
         quest.spell_id = (1u << 24) | 7u;
         CHECK(session->PublishActions({quest}, actionError));
+
+        BotAction teleport;
+        teleport.bot_guid = 42;
+        teleport.type = ActionType::kTeleport;
+        teleport.spell_id = 36;
+        CHECK(session->PublishActions({teleport}, actionError));
+
+        BotAction grant;
+        grant.bot_guid = 42;
+        grant.type = ActionType::kGrant;
+        grant.spell_id = 2092;
+        grant.dest_x = 1.0f;
+        CHECK(session->PublishActions({grant}, actionError));
+
+        BotAction beyond;
+        beyond.bot_guid = 42;
+        beyond.type = static_cast<ActionType>(13);
+        CHECK(!session->PublishActions({beyond}, actionError));
     }
 
     // A region written with another layout version is refused, with the reason in the error.
