@@ -7,6 +7,11 @@
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 
+## Unreleased: log action
+
+- Tier 1 `LogAction` (actions.proto field 17, `ModuleClient::Log(level, text)`): a module writes a line to the core's Server.log, tagged
+  with its name. Additive; an old core answers it as an unknown action. Protocol version unchanged.
+
 ## Layout 10 (cast state, breaking for layout 9 modules)
 
 - `BotSnapshot` gains `moving`, `casting_spell` and `cast_remaining_ms`. `BotActionStatus` gains `kBusy` (a cast refused: the bot is

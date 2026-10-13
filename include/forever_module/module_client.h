@@ -113,6 +113,9 @@ public:
     std::uint64_t ShareQuestItem(std::uint64_t playerGuid, std::uint32_t itemEntry, std::uint32_t count,
                                  std::uint32_t rangeYards = 0, ActionCallback onReply = nullptr);
 
+    // Writes a line to the core's Server.log, tagged with this module's name. level 0 info, 1 warning, 2 error; text 1 to 255 bytes.
+    std::uint64_t Log(std::uint32_t level, std::string const& text, ActionCallback onReply = nullptr);
+
     // Module store (doc 15): key/value rows private to this module, kept in the world database. Replies arrive like
     // other action replies. StoreGet sets found and value; StoreDelete sets found (the key existed); StoreList fills keys.
     // Keys are at most 128 characters, values at most 1024 bytes, and a module can hold 1000 rows.

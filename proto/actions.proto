@@ -27,6 +27,13 @@ message ShareQuestItemAction {
   optional uint32 range_yards = 4;
 }
 
+// Writes one line to the core's server log (Server.log), tagged with the module's name. level 0 is info, 1 warning, 2 error; text is
+// 1 to 255 bytes. Needs no player. For lines the operator should find next to the core's own, such as a periodic summary.
+message LogAction {
+  optional uint32 level = 1;
+  optional string text = 2;
+}
+
 // Sends a system message to a player, the same way a GM command reply is shown.
 message SendPlayerMessageAction {
   optional uint64 player_guid = 1;
@@ -62,6 +69,7 @@ message ActionRequest {
     StoreDeleteAction store_delete = 14;
     StoreListAction store_list = 15;
     ShareQuestItemAction share_quest_item = 16;
+    LogAction log = 17;
   }
 }
 

@@ -399,6 +399,15 @@ std::uint64_t ModuleClient::ShareQuestItem(std::uint64_t playerGuid, std::uint32
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::Log(std::uint32_t level, std::string const& text, ActionCallback onReply)
+{
+    ActionRequest request;
+    LogAction* log = request.mutable_log();
+    log->set_level(level);
+    log->set_text(text);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::string const& text, ActionCallback onReply)
 {
     ActionRequest request;
