@@ -7,6 +7,12 @@
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 
+## Unreleased: scenario actions
+
+- `ActionType::kTeleport` (11), `kGrant` (12) and `kAutoGear` (13), for scenarios (doc 19 of the core): put a bot at a map position, add an
+  item to its bags, and dress it for its level. Additive; an old core refuses them as unknown action types. The core accepts the first two
+  only with `Bot.Actions.Teleport` / `Bot.Actions.Grant` on. `PublishActions` accepts every type up to `kAutoGear`.
+
 ## Unreleased: placement in SpawnParams
 
 - `SpawnParams` gains `place`, `map_id`, `pos_x`, `pos_y`, `pos_z` (control.proto fields 5 to 9): where the bot is put when it logs in.
