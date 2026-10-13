@@ -155,6 +155,11 @@ int main()
         party.type = ActionType::kGroup;
         party.spell_id = 3;
         CHECK(session->PublishActions({party}, actionError));
+
+        BotAction loot;
+        loot.bot_guid = 42;
+        loot.type = ActionType::kLoot;
+        CHECK(session->PublishActions({loot}, actionError));
     }
 
     // A region written with another layout version is refused, with the reason in the error.

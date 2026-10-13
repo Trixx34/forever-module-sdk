@@ -134,6 +134,8 @@ enum class ActionType : std::uint32_t {
     kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
     kGroup = 8,  // party actions (M8). spell_id 1 invites the bot named by target_guid, 2 accepts the bot's pending invite,
                  // 3 leaves the bot's party. Refused in combat.
+    kLoot = 9,   // loot the corpse named by target_guid: every item the bot may take, and the money (M7). The corpse must be
+                 // dead, within 30 yards, and one the bot has the right to loot; an empty or partly looted corpse is not an error.
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
