@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 9;
+inline constexpr std::uint32_t kTier2LayoutVersion = 10;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -56,6 +56,8 @@ enum class BotActionStatus : std::uint8_t {
     kNoLineOfSight = 8,
     kInvalidTarget = 9,  // no unit for the target reference, or it is not a valid target
     kNotOnline = 10,     // the bot was not in the world when the action ran
+    kBusy = 11,          // a cast: the bot is already casting; try again when it is done (layout 10)
+    kMoving = 12,        // a cast: the spell has a cast time and the bot is moving; stop first (layout 10)
 };
 
 // One active spell cooldown of a bot. spell_id 0 marks an unused slot.
@@ -131,6 +133,12 @@ struct BotSnapshot {
     float repair_z = 0.0f;
     std::uint8_t repair_valid = 0;
     std::uint8_t durability_pct = 100;
+    // Layout 10: what the bot is doing, so a module does not try what is certain to fail. moving is 1 while the bot is moving. casting_spell is the
+    // spell id of the cast or channel in progress (0 when none) and cast_remaining_ms what is left of it (a cast with a cast time cannot be
+    // started while moving, and no cast can be started while another is in progress).
+    std::uint8_t moving = 0;
+    std::uint32_t casting_spell = 0;
+    std::uint32_t cast_remaining_ms = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
