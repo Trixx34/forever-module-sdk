@@ -148,6 +148,13 @@ int main()
         CHECK(!session->PublishActions({unknown}, actionError));
         CHECK(actionError.find("unknown action type") != std::string::npos);
         CHECK(header->published_action_buffer.load() == 0);
+
+        // Every type up to kGroup is known: a rest or a party action is accepted, not refused as unknown.
+        BotAction party;
+        party.bot_guid = 42;
+        party.type = ActionType::kGroup;
+        party.spell_id = 3;
+        CHECK(session->PublishActions({party}, actionError));
     }
 
     // A region written with another layout version is refused, with the reason in the error.
