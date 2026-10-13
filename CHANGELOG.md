@@ -1,5 +1,11 @@
 # Changelog
 
+## Layout 6 (M6, breaking for layout 5 modules)
+
+- `BotSnapshot` gains `vendor_x`, `vendor_y`, `vendor_z` and `vendor_valid`: the nearest vendor to the bot on its own map.
+  The core finds it, since a bot only sees units within 40 yards. Travel to vendors no longer needs a position per race.
+- Protocol unchanged. A module built against layout 5 is refused at region attach, since the layout version differs.
+
 ## Layout 5 (M8, breaking for layout 4 modules)
 
 - `BotSnapshot` gains `group_role`, `group_size`, `group_leader_guid` and `group_invite_from`: the bot's party (M8).
