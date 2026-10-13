@@ -387,6 +387,18 @@ std::uint64_t ModuleClient::SellItem(std::uint64_t playerGuid, std::uint64_t ite
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::ShareQuestItem(std::uint64_t playerGuid, std::uint32_t itemEntry, std::uint32_t count,
+                                           std::uint32_t rangeYards, ActionCallback onReply)
+{
+    ActionRequest request;
+    ShareQuestItemAction* share = request.mutable_share_quest_item();
+    share->set_player_guid(playerGuid);
+    share->set_item_entry(itemEntry);
+    share->set_count(count);
+    share->set_range_yards(rangeYards);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::string const& text, ActionCallback onReply)
 {
     ActionRequest request;

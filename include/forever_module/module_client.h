@@ -108,6 +108,10 @@ public:
                            std::uint32_t count, ActionCallback onReply = nullptr);
     std::uint64_t SendPlayerMessage(std::uint64_t playerGuid, std::string const& text,
                                     ActionCallback onReply = nullptr);
+    // Gives the player's party members who need it a copy of a quest item the player looted. The reply carries the number of members
+    // given it (recipients). rangeYards 0 uses the core's default.
+    std::uint64_t ShareQuestItem(std::uint64_t playerGuid, std::uint32_t itemEntry, std::uint32_t count,
+                                 std::uint32_t rangeYards = 0, ActionCallback onReply = nullptr);
 
     // Module store (doc 15): key/value rows private to this module, kept in the world database. Replies arrive like
     // other action replies. StoreGet sets found and value; StoreDelete sets found (the key existed); StoreList fills keys.
