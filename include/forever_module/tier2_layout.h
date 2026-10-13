@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 6;
+inline constexpr std::uint32_t kTier2LayoutVersion = 7;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -108,6 +108,8 @@ struct BotSnapshot {
     float vendor_y = 0.0f;
     float vendor_z = 0.0f;
     std::uint8_t vendor_valid = 0;
+    // Layout 7: the map the bot is on (M7 hubs). A module picks the hubs of its bot's map from this.
+    std::uint32_t map_id = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
