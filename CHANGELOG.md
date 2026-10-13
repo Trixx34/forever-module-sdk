@@ -1,5 +1,10 @@
 # Changelog
 
+## Layout 7 (M7 hubs, breaking for layout 6 modules)
+
+- `BotSnapshot` gains `map_id`: the map the bot is on, so a module can pick the hubs of that map.
+- Protocol unchanged. A module built against layout 6 is refused at region attach, since the layout version differs.
+
 ## Layout 6 (M6, breaking for layout 5 modules)
 
 - `BotSnapshot` gains `vendor_x`, `vendor_y`, `vendor_z` and `vendor_valid`: the nearest vendor to the bot on its own map.
