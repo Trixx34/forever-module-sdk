@@ -35,6 +35,12 @@ message PlayerChatEvent {
   optional uint32 channel = 2;  // 1 party, 2 raid, 3 whisper
   optional string text = 3;
   optional uint64 recipient_guid = 4;
+  // Where the speaker is, and the unit it has selected (a unit reference as in Tier 2: MakeUnitRef; 0 = none or not encodable).
+  optional uint32 map_id = 5;
+  optional float pos_x = 6;
+  optional float pos_y = 7;
+  optional float pos_z = 8;
+  optional uint64 target_ref = 9;
 }
 
 message WorldStartupEvent {
