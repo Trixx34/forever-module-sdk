@@ -525,6 +525,8 @@ Failures RunControlScenario()
             EXPECT_IN(coreFails, in.control_request().bot_guid() == 0);
             EXPECT_IN(coreFails, in.control_request().spawn_params().race() == 1);
             EXPECT_IN(coreFails, in.control_request().spawn_params().level() == 80);
+            EXPECT_IN(coreFails, in.control_request().spawn_params().place() && in.control_request().spawn_params().map_id() == 36);
+            EXPECT_IN(coreFails, in.control_request().spawn_params().pos_x() == -16.5f && in.control_request().spawn_params().pos_z() == 61.8f);
 
             out.Clear();
             out.set_message_id(requestId);
@@ -584,6 +586,11 @@ Failures RunControlScenario()
     SpawnParams params;
     params.set_race(1);
     params.set_level(80);
+    params.set_place(true);
+    params.set_map_id(36);
+    params.set_pos_x(-16.5f);
+    params.set_pos_y(-383.0f);
+    params.set_pos_z(61.8f);
     client.RequestControl(0, params, [&](ControlResponse const& response)
     {
         granted = response.granted();

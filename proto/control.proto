@@ -11,6 +11,13 @@ message SpawnParams {
   optional uint32 class_id = 2;
   optional uint32 level = 3;
   optional uint32 team = 4;
+  // Placement: with place true, the bot is put at (map_id, pos_x, pos_y, pos_z) when it logs in, instead of being spread around
+  // its race's start. For repeatable scenarios (doc 19). map_id 0 is a real map, hence the explicit flag.
+  optional bool place = 5;
+  optional uint32 map_id = 6;
+  optional float pos_x = 7;
+  optional float pos_y = 8;
+  optional float pos_z = 9;
 }
 
 message ControlRequest {
