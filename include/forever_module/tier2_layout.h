@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 8;
+inline constexpr std::uint32_t kTier2LayoutVersion = 9;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -124,6 +124,13 @@ struct BotSnapshot {
     // Layout 8: the bot's quest log (M5), the first quest_count entries of quests[].
     std::uint8_t quest_count = 0;
     QuestEntry quests[kMaxQuestLog] = {};
+    // Layout 9: the nearest repairman (friendly to the bot, on its own map; repair_valid is 0 when there is none) and the lowest
+    // durability of the bot's equipped items in percent (100 when it wears nothing that wears out).
+    float repair_x = 0.0f;
+    float repair_y = 0.0f;
+    float repair_z = 0.0f;
+    std::uint8_t repair_valid = 0;
+    std::uint8_t durability_pct = 100;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };

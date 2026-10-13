@@ -7,6 +7,12 @@
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 
+## Layout 9 (repair, breaking for layout 8 modules)
+
+- `BotSnapshot` gains `repair_x`, `repair_y`, `repair_z`, `repair_valid` (the nearest friendly repairman on the bot's map) and
+  `durability_pct` (the lowest equipped durability in percent). The vendor in `vendor_*` is now also one friendly to the bot.
+- Protocol unchanged. A module built against layout 8 is refused at region attach, since the layout version differs.
+
 ## Layout 8 (M5 quests, breaking for layout 7 modules)
 
 - `BotSnapshot` gains `quest_count` and `quests[8]` (`QuestEntry`: quest id, status, up to 4 objective counts): the bot's quest log.
