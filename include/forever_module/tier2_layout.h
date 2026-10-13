@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 10;
+inline constexpr std::uint32_t kTier2LayoutVersion = 11;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -139,6 +139,18 @@ struct BotSnapshot {
     std::uint8_t moving = 0;
     std::uint32_t casting_spell = 0;
     std::uint32_t cast_remaining_ms = 0;
+    // Layout 11: death state. life_state is 0 alive, 1 dead (corpse, spirit not released), 2 ghost (released). A ghost has health 1, so
+    // test life_state, not health. corpse_valid is 1 when corpse_map and corpse_x/y/z are set (a ghost: where its corpse lies, which can be
+    // another map than map_id; a dead bot: its own position). reclaim_wait_ms is the time until the corpse may be reclaimed (0 = now; ghosts
+    // only). resurrect_from is the unit reference of the player whose resurrect offer is pending (0 none).
+    std::uint8_t life_state = 0;
+    std::uint8_t corpse_valid = 0;
+    std::uint32_t corpse_map = 0;
+    float corpse_x = 0.0f;
+    float corpse_y = 0.0f;
+    float corpse_z = 0.0f;
+    std::uint32_t reclaim_wait_ms = 0;
+    std::uint64_t resurrect_from = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -175,6 +187,12 @@ enum class ActionType : std::uint32_t {
     kQuest = 10, // quest actions at an NPC within interaction range (M5). spell_id = (operation << 24) | quest id, with operation 1 =
                  // accept the quest from a giver, 2 = hand it in at an ender (the core picks the reward item), 3 = abandon it
                  // (no NPC needed). Accept and hand-in are refused in combat.
+    kReleaseSpirit = 14, // release the spirit of the dead bot (layout 11): the corpse becomes a ghost at the graveyard. No arguments. Refused
+                         // when the bot is alive, already a ghost, being teleported, or in combat.
+    kResurrect = 15,     // answer a pending resurrect offer (layout 11). target_guid = the resurrecter's player unit ref (BotSnapshot::resurrect_from);
+                         // spell_id 0 accepts, 1 declines.
+    kReclaimCorpse = 16, // reclaim the corpse (layout 11): a ghost within the corpse reclaim radius of its corpse, once the reclaim delay is over.
+    kLastActionType = kReclaimCorpse, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

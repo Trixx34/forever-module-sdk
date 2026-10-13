@@ -1,5 +1,14 @@
 # Changelog
 
+## Layout 11 / protocol 5 (dead-bot recovery, breaking for layout 10 modules)
+
+- `BotSnapshot` gains `life_state` (0 alive, 1 dead, 2 ghost), `corpse_valid`, `corpse_map`, `corpse_x/y/z`, `reclaim_wait_ms` and `resurrect_from`.
+  A ghost has health 1: test `life_state`, not `health`.
+- `ActionType` gains `kReleaseSpirit` (14, refused in combat), `kResurrect` (15, `target_guid` = resurrecter ref, `spell_id` 0 accept / 1 decline),
+  `kReclaimCorpse` (16) and `kLastActionType`. `PublishActions` accepts every type up to `kReclaimCorpse`.
+- `kProtocolVersion` bumped from "4" to "5" (core `kModuleProtocolVersion` too). A module manifest declaring protocol "4" is refused.
+  A module built against layout 10 is refused at region attach.
+
 ## Unreleased (no protocol or layout change)
 
 - Tier 1 `ShareQuestItemAction` (actions.proto field 16, `ModuleClient::ShareQuestItem`) and `ActionReply.recipients` (field 8): give a quest

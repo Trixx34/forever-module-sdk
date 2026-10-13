@@ -33,9 +33,9 @@ The design docs live in the core repository, not in this one: `doc/module-system
 
 Two independent axes (see `doc/module-system/11-sdk-scope.md` in the core repo):
 
-- **`protocol_version`** (`include/forever_module/protocol_version.h`, `kProtocolVersion`, currently `"4"`) is the wire contract.
+- **`protocol_version`** (`include/forever_module/protocol_version.h`, `kProtocolVersion`, currently `"5"`) is the wire contract.
   Core exact-matches it at handshake. Only bumps on breaking changes.
-- **Tier 2 layout version** (`kTier2LayoutVersion` in `tier2_layout.h`, currently `7`) is the shared-memory layout. A module built
+- **Tier 2 layout version** (`kTier2LayoutVersion` in `tier2_layout.h`, currently `11`) is the shared-memory layout. A module built
   against another layout is refused at region attach. Each layout bump is listed in `CHANGELOG.md`; adding an action type or a Tier 1
   action does not bump it.
 - **SDK package version** (`kSdkPackageVersion`, currently `"0.1.0"`) is this repo's own release version.
