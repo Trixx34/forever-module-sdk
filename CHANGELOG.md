@@ -7,6 +7,12 @@
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 
+## Layout 10 (cast state, breaking for layout 9 modules)
+
+- `BotSnapshot` gains `moving`, `casting_spell` and `cast_remaining_ms`. `BotActionStatus` gains `kBusy` (a cast refused: the bot is
+  already casting) and `kMoving` (a cast refused: the spell has a cast time and the bot is moving).
+- Protocol unchanged. A module built against layout 9 is refused at region attach, since the layout version differs.
+
 ## Unreleased: scenario actions
 
 - `ActionType::kTeleport` (11), `kGrant` (12) and `kAutoGear` (13), for scenarios (doc 19 of the core): put a bot at a map position, add an
