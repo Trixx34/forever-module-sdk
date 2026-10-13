@@ -143,7 +143,7 @@ bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::st
     }
     for (BotAction const& action : actions)
     {
-        if (static_cast<std::uint32_t>(action.type) > static_cast<std::uint32_t>(ActionType::kQuest))
+        if (static_cast<std::uint32_t>(action.type) > static_cast<std::uint32_t>(ActionType::kGrant))
         {
             error = "unknown action type " + std::to_string(static_cast<std::uint32_t>(action.type));
             return false;
