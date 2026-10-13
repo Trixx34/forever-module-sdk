@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 7;
+inline constexpr std::uint32_t kTier2LayoutVersion = 8;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -62,6 +62,17 @@ enum class BotActionStatus : std::uint8_t {
 struct SpellCooldown {
     std::uint32_t spell_id = 0;
     std::uint32_t remaining_ms = 0;
+};
+
+// Layout 8: one quest in a bot's quest log (M5). status: 1 incomplete, 2 complete (ready to hand in), 3 failed. counts[i] is the
+// progress of the quest's i-th objective (a kill count or an item count), 0 for unused objectives.
+inline constexpr std::size_t kMaxQuestLog = 8;
+inline constexpr std::size_t kMaxQuestObjectives = 4;
+struct QuestEntry {
+    std::uint32_t quest_id = 0;   // 0 marks an unused slot
+    std::uint8_t status = 0;
+    std::uint8_t reserved = 0;
+    std::uint16_t counts[kMaxQuestObjectives] = {};
 };
 
 struct BotSnapshot {
@@ -110,6 +121,9 @@ struct BotSnapshot {
     std::uint8_t vendor_valid = 0;
     // Layout 7: the map the bot is on (M7 hubs). A module picks the hubs of its bot's map from this.
     std::uint32_t map_id = 0;
+    // Layout 8: the bot's quest log (M5), the first quest_count entries of quests[].
+    std::uint8_t quest_count = 0;
+    QuestEntry quests[kMaxQuestLog] = {};
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -136,6 +150,9 @@ enum class ActionType : std::uint32_t {
                  // 3 leaves the bot's party. Refused in combat.
     kLoot = 9,   // loot the corpse named by target_guid: every item the bot may take, and the money (M7). The corpse must be
                  // dead, within 30 yards, and one the bot has the right to loot; an empty or partly looted corpse is not an error.
+    kQuest = 10, // quest actions at an NPC within interaction range (M5). spell_id = (operation << 24) | quest id, with operation 1 =
+                 // accept the quest from a giver, 2 = hand it in at an ender (the core picks the reward item), 3 = abandon it
+                 // (no NPC needed). Accept and hand-in are refused in combat.
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

@@ -7,6 +7,13 @@
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 
+## Layout 8 (M5 quests, breaking for layout 7 modules)
+
+- `BotSnapshot` gains `quest_count` and `quests[8]` (`QuestEntry`: quest id, status, up to 4 objective counts): the bot's quest log.
+- `ActionType::kQuest` (10): accept (1), hand in (2) or abandon (3) a quest; `spell_id = (operation << 24) | quest id`. The core finds the
+  NPC in interaction range and picks the reward item. `PublishActions` accepts every type up to `kQuest`.
+- Protocol unchanged. A module built against layout 7 is refused at region attach, since the layout version differs.
+
 ## Layout 7 (M7 hubs, breaking for layout 6 modules)
 
 - `BotSnapshot` gains `map_id`: the map the bot is on, so a module can pick the hubs of that map.

@@ -160,6 +160,12 @@ int main()
         loot.bot_guid = 42;
         loot.type = ActionType::kLoot;
         CHECK(session->PublishActions({loot}, actionError));
+
+        BotAction quest;
+        quest.bot_guid = 42;
+        quest.type = ActionType::kQuest;
+        quest.spell_id = (1u << 24) | 7u;
+        CHECK(session->PublishActions({quest}, actionError));
     }
 
     // A region written with another layout version is refused, with the reason in the error.
