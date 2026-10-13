@@ -25,7 +25,7 @@ The design docs live in the core repository, not in this one: `doc/module-system
 
 **Tier 2 (`Tier2Session`, shared memory)**
 - A snapshot of every controlled bot each tick (position, health, power, level, combat state, the result of its last action,
-  cooldowns, party state, nearest vendor, map, and up to 16 nearby units), read as a `WorldTickSnapshotView`.
+  cooldowns, party state, nearest vendor, map, and the nearby units, 16 per bot by default), read as a `WorldTickSnapshotView`.
 - Actions published back for the next tick (`PublishActions`): move, follow, attack, cast, stop, rest, vendor, train, group
   (party), and loot. The core re-checks everything it is asked to do.
 
