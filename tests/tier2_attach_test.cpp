@@ -186,9 +186,25 @@ int main()
         gear.spell_id = 1;
         CHECK(session->PublishActions({gear}, actionError));
 
+        BotAction release;
+        release.bot_guid = 42;
+        release.type = ActionType::kReleaseSpirit;
+        CHECK(session->PublishActions({release}, actionError));
+
+        BotAction revive;
+        revive.bot_guid = 42;
+        revive.type = ActionType::kResurrect;
+        revive.target_guid = MakeUnitRef(2, 0, 7);
+        CHECK(session->PublishActions({revive}, actionError));
+
+        BotAction reclaim;
+        reclaim.bot_guid = 42;
+        reclaim.type = ActionType::kReclaimCorpse;
+        CHECK(session->PublishActions({reclaim}, actionError));
+
         BotAction beyond;
         beyond.bot_guid = 42;
-        beyond.type = static_cast<ActionType>(14);
+        beyond.type = static_cast<ActionType>(17);
         CHECK(!session->PublishActions({beyond}, actionError));
     }
 
