@@ -7,6 +7,11 @@
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 
+## Unreleased: placement in SpawnParams
+
+- `SpawnParams` gains `place`, `map_id`, `pos_x`, `pos_y`, `pos_z` (control.proto fields 5 to 9): where the bot is put when it logs in.
+  Additive; an old core ignores them and spreads the bot as before.
+
 ## Layout 9 (repair, breaking for layout 8 modules)
 
 - `BotSnapshot` gains `repair_x`, `repair_y`, `repair_z`, `repair_valid` (the nearest friendly repairman on the bot's map) and
