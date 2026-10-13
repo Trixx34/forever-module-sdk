@@ -1,5 +1,11 @@
 # Changelog
 
+## Layout 5 (M8, breaking for layout 4 modules)
+
+- `BotSnapshot` gains `group_role`, `group_size`, `group_leader_guid` and `group_invite_from`: the bot's party (M8).
+- `ActionType::kGroup` (8): invite, accept, or leave a party (`spell_id` 1, 2, 3).
+- Protocol unchanged. A module built against layout 4 is refused at region attach, since the layout version differs.
+
 ## Unreleased (no protocol or layout change)
 
 - `ActionType::kVendor` (6): sell grey items, repair and equip the best gear, at an NPC within interaction range (M3).
