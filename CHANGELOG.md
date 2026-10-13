@@ -2,6 +2,8 @@
 
 ## Unreleased (no protocol or layout change)
 
+- Tier 1 `ShareQuestItemAction` (actions.proto field 16, `ModuleClient::ShareQuestItem`) and `ActionReply.recipients` (field 8): give a quest
+  item a player looted to the party members who still need it. Additive. Old cores answer it as an unknown action.
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
 

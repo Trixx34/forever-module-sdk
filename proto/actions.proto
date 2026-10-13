@@ -17,6 +17,16 @@ message SellItemAction {
   optional uint32 count = 4;       // must equal the item's current stack size
 }
 
+// Gives a copy of a quest item the player just looted to each of the player's party members who still need it. Core finds the
+// party, keeps the members on the player's map and within range_yards (0 = the default), checks that each has a quest that needs
+// the item and room in the bags, and gives count of the item. The player keeps their own copy.
+message ShareQuestItemAction {
+  optional uint64 player_guid = 1;  // the member who looted the item
+  optional uint32 item_entry = 2;
+  optional uint32 count = 3;
+  optional uint32 range_yards = 4;
+}
+
 // Sends a system message to a player, the same way a GM command reply is shown.
 message SendPlayerMessageAction {
   optional uint64 player_guid = 1;
@@ -51,6 +61,7 @@ message ActionRequest {
     StoreSetAction store_set = 13;
     StoreDeleteAction store_delete = 14;
     StoreListAction store_list = 15;
+    ShareQuestItemAction share_quest_item = 16;
   }
 }
 
@@ -62,4 +73,5 @@ message ActionReply {
   optional bool found = 5;           // StoreGet: whether the key exists; StoreDelete: whether it existed
   optional bytes value = 6;          // StoreGet: the stored value when found
   repeated string keys = 7;          // StoreList: the matching keys, sorted
+  optional uint32 recipients = 8;    // ShareQuestItem: how many party members were given the item
 }

@@ -688,6 +688,120 @@ void Report(char const* name, Failures const& fails, int& failedScenarios)
 
 } // namespace
 
+// Share scenario: core sends a quest item loot notify, the module answers it with a ShareQuestItem action, and the fake core replies
+// with the number of recipients.
+Failures RunShareScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+
+    std::string const path = SocketPath("share");
+    ::unlink(path.c_str());
+
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(11);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        out.Clear();
+        EventNotify* notify = out.mutable_event_notify();
+        notify->set_hook_name("PlayerScript.OnLootItem");
+        PlayerItemLootedEvent* loot = notify->mutable_player_item_looted();
+        loot->set_player_guid(42);
+        loot->set_item_guid(6001);
+        loot->set_item_entry(3000);
+        loot->set_count(1);
+        loot->set_quality(1);
+        loot->set_item_class(12); // a quest item
+        loot->set_item_name("Wolf Pelt");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        bool gotShare = false;
+        while (ReadEnvelope(socket, in))
+        {
+            if (in.payload_case() == Envelope::kHeartbeat)
+                continue;
+            gotShare = in.payload_case() == Envelope::kActionRequest && in.action_request().has_share_quest_item();
+            break;
+        }
+        EXPECT_IN(coreFails, gotShare);
+        if (gotShare)
+        {
+            std::uint64_t const id = in.action_request().message_id();
+            ShareQuestItemAction const& share = in.action_request().share_quest_item();
+            EXPECT_IN(coreFails, share.player_guid() == 42);
+            EXPECT_IN(coreFails, share.item_entry() == 3000);
+            EXPECT_IN(coreFails, share.count() == 1);
+            EXPECT_IN(coreFails, share.range_yards() == 80);
+
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(id);
+            reply->set_success(true);
+            reply->set_recipients(2);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "share-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"PlayerScript.OnLootItem"};
+    manifest.heartbeat_interval = 20ms;
+
+    ModuleClient client(manifest);
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+
+    bool replied = false;
+    std::uint32_t recipients = 0;
+    client.OnNotify("PlayerScript.OnLootItem", [&](EventNotify const& notify)
+    {
+        PlayerItemLootedEvent const& loot = notify.player_item_looted();
+        if (loot.item_class() != 12)
+            return;
+        client.ShareQuestItem(loot.player_guid(), loot.item_entry(), loot.count(), 80, [&](ActionReply const& reply)
+        {
+            replied = reply.success();
+            recipients = reply.recipients();
+        });
+    });
+
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, replied);
+    EXPECT_IN(clientFails, recipients == 2);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 int main()
 {
     int failedScenarios = 0;
@@ -697,5 +811,6 @@ int main()
     Report("loot notify answered with sell and message actions", RunLootScenario(), failedScenarios);
     Report("control: spawn request, revoke, release", RunControlScenario(), failedScenarios);
     Report("timer fires on the Run() thread while the core is silent", RunTimerScenario(), failedScenarios);
+    Report("quest item loot answered with a share action", RunShareScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }
