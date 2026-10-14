@@ -204,7 +204,7 @@ int main()
 
         BotAction beyond;
         beyond.bot_guid = 42;
-        beyond.type = static_cast<ActionType>(17);
+        beyond.type = static_cast<ActionType>(static_cast<std::uint32_t>(ActionType::kLastActionType) + 1);
         CHECK(!session->PublishActions({beyond}, actionError));
     }
 
