@@ -301,6 +301,18 @@ std::uint64_t ModuleClient::BuyItem(std::uint64_t vendorGuid, std::uint32_t item
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+void ModuleClient::Vendor(std::uint64_t botGuid, std::uint64_t vendorGuid, std::uint32_t spellId,
+                          ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kVendor;
+    action.spell_id = spellId; // bitmask: 1 sell, 2 repair, 4 equip
+    action.target_guid = vendorGuid;
+    PublishBotAction(action);
+}
+
 std::uint64_t ModuleClient::AuctionHouse(AuctionHouseOp op, std::uint64_t auctioneerGuid,
                                          std::uint64_t itemGuid, std::uint64_t auctionGuid,
                                          std::uint32_t itemEntry, std::uint32_t count,
