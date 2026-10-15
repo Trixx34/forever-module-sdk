@@ -58,6 +58,8 @@ enum class BotActionStatus : std::uint8_t {
     kNotOnline = 10,     // the bot was not in the world when the action ran
     kBusy = 11,          // a cast: the bot is already casting; try again when it is done (layout 10)
     kMoving = 12,        // a cast: the spell has a cast time and the bot is moving; stop first (layout 10)
+    kNoRoute = 13,       // a move: the navmesh has no full route to the destination, so the bot walks to the nearest reachable point
+                         // and stops there (the move is still applied). Only sent for kMoveTo.
 };
 
 // One active spell cooldown of a bot. spell_id 0 marks an unused slot.
