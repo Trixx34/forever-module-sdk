@@ -116,6 +116,61 @@ public:
     // Writes a line to the core's Server.log, tagged with this module's name. level 0 info, 1 warning, 2 error; text 1 to 255 bytes.
     std::uint64_t Log(std::uint32_t level, std::string const& text, ActionCallback onReply = nullptr);
 
+    // Buys `count` of `item_entry` from a vendor NPC at `vendorGuid`. Core checks the vendor is in range,
+    // the item is on its sell list, and the player has enough money.
+    std::uint64_t BuyItem(std::uint64_t vendorGuid, std::uint32_t itemEntry, std::uint32_t count,
+                          ActionCallback onReply = nullptr);
+
+    // Auction house interaction at an auctioneer NPC. op selects bid / buyout / list / cancel / browse.
+    // itemGuid is the bag item to list; auctionGuid identifies an existing auction for bid/buyout/cancel.
+    // bid/buyout are in copper. itemEntry is what to browse for.
+    enum class AuctionHouseOp : std::uint32_t {
+        kBrowse = 0,
+        kBid = 1,
+        kBuyout = 2,
+        kList = 3,
+        kCancel = 4,
+    };
+    std::uint64_t AuctionHouse(AuctionHouseOp op, std::uint64_t auctioneerGuid,
+                               std::uint64_t itemGuid = 0, std::uint64_t auctionGuid = 0,
+                               std::uint32_t itemEntry = 0, std::uint32_t count = 0,
+                               std::uint32_t bid = 0, std::uint32_t buyout = 0,
+                               ActionCallback onReply = nullptr);
+
+    // --- Tier 2 bot-action convenience methods ---
+    // Each builds a BotAction and publishes it via AttachTier2()->PublishActions(). The reply arrives
+    // asynchronously through onReply (if non-null), and the result is also reflected in the bot's
+    // BotSnapshot::last_action_* fields on the next Tier 2 tick.
+
+    void CastSpell(std::uint64_t botGuid, std::uint32_t spellId, std::uint64_t targetGuid = 0,
+                   ActionCallback onReply = nullptr);
+    void MoveTo(std::uint64_t botGuid, float x, float y, float z, ActionCallback onReply = nullptr);
+    void AttackTarget(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply = nullptr);
+    void Follow(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply = nullptr);
+    void Stop(std::uint64_t botGuid, ActionCallback onReply = nullptr);
+    void Rest(std::uint64_t botGuid, bool sitDown, ActionCallback onReply = nullptr);
+    void Train(std::uint64_t botGuid, ActionCallback onReply = nullptr);
+    void Loot(std::uint64_t botGuid, std::uint64_t corpseGuid, ActionCallback onReply = nullptr);
+    void GroupInvite(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply = nullptr);
+    void GroupAccept(std::uint64_t botGuid, ActionCallback onReply = nullptr);
+    void GroupLeave(std::uint64_t botGuid, ActionCallback onReply = nullptr);
+    void QuestAccept(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply = nullptr);
+    void QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply = nullptr);
+    void QuestAbandon(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply = nullptr);
+    void Teleport(std::uint64_t botGuid, std::uint32_t mapId, float x, float y, float z,
+                  ActionCallback onReply = nullptr);
+    void Grant(std::uint64_t botGuid, std::uint32_t itemEntry, std::uint32_t count = 1,
+               ActionCallback onReply = nullptr);
+    void AutoGear(std::uint64_t botGuid, bool tank, ActionCallback onReply = nullptr);
+    void ReleaseSpirit(std::uint64_t botGuid, ActionCallback onReply = nullptr);
+    void Resurrect(std::uint64_t botGuid, std::uint64_t resurrecterGuid, bool accept,
+                   ActionCallback onReply = nullptr);
+    void ReclaimCorpse(std::uint64_t botGuid, ActionCallback onReply = nullptr);
+    void Summon(std::uint64_t botGuid, std::uint64_t targetGuid, float spreadIndex = 0.0f,
+                ActionCallback onReply = nullptr);
+    void Revive(std::uint64_t botGuid, std::uint64_t resurrecterGuid, ActionCallback onReply = nullptr);
+    void Mount(std::uint64_t botGuid, bool mountUp, ActionCallback onReply = nullptr);
+
     // Module store (doc 15): key/value rows private to this module, kept in the world database. Replies arrive like
     // other action replies. StoreGet sets found and value; StoreDelete sets found (the key existed); StoreList fills keys.
     // Keys are at most 128 characters, values at most 1024 bytes, and a module can hold 1000 rows.
@@ -170,6 +225,9 @@ private:
     void StartHeartbeat();
     void StopHeartbeat();
     bool Dispatch(Envelope const& envelope); // false means stop the Run() loop
+
+    // Publishes a single BotAction through Tier 2. Returns false if the module has no Tier 2 session.
+    bool PublishBotAction(BotAction const& action);
 
     ModuleManifest manifest_;
     std::unique_ptr<Transport> transport_;

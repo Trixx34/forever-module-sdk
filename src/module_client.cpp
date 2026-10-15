@@ -290,6 +290,45 @@ std::uint64_t ModuleClient::Log(std::uint32_t level, std::string const& text, Ac
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BuyItem(std::uint64_t vendorGuid, std::uint32_t itemEntry,
+                                    std::uint32_t count, ActionCallback onReply)
+{
+    ActionRequest request;
+    BuyItemAction* buy = request.mutable_buy_item();
+    buy->set_vendor_guid(vendorGuid);
+    buy->set_item_entry(itemEntry);
+    buy->set_count(count);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::AuctionHouse(AuctionHouseOp op, std::uint64_t auctioneerGuid,
+                                         std::uint64_t itemGuid, std::uint64_t auctionGuid,
+                                         std::uint32_t itemEntry, std::uint32_t count,
+                                         std::uint32_t bid, std::uint32_t buyout,
+                                         ActionCallback onReply)
+{
+    ActionRequest request;
+    AuctionHouseAction* ah = request.mutable_auction_house();
+    ah->set_op(static_cast<std::uint32_t>(op));
+    ah->set_auctioneer_guid(auctioneerGuid);
+    ah->set_item_guid(itemGuid);
+    ah->set_auction_guid(auctionGuid);
+    ah->set_item_entry(itemEntry);
+    ah->set_count(count);
+    ah->set_bid(bid);
+    ah->set_buyout(buyout);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+// Publishes a single bot action through Tier 2. Returns false if the module has no Tier 2 session.
+bool ModuleClient::PublishBotAction(BotAction const& action)
+{
+    if (!tier2_)
+        return false;
+    std::string error;
+    return tier2_->PublishActions({action}, error);
+}
+
 std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::string const& text, ActionCallback onReply)
 {
     ActionRequest request;
@@ -327,6 +366,249 @@ std::uint64_t ModuleClient::StoreList(std::string const& prefix, ActionCallback 
     ActionRequest request;
     request.mutable_store_list()->set_prefix(prefix);
     return RequestAction(std::move(request), std::move(onReply));
+}
+
+// --- Tier 2 bot-action convenience methods ---
+
+void ModuleClient::CastSpell(std::uint64_t botGuid, std::uint32_t spellId, std::uint64_t targetGuid,
+                             ActionCallback onReply)
+{
+    (void)onReply; // Tier 2 actions have no Tier 1 reply; result appears in the next snapshot
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kCastSpell;
+    action.spell_id = spellId;
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::MoveTo(std::uint64_t botGuid, float x, float y, float z, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kMoveTo;
+    action.dest_x = x;
+    action.dest_y = y;
+    action.dest_z = z;
+    PublishBotAction(action);
+}
+
+void ModuleClient::AttackTarget(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kAttackTarget;
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Follow(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kFollow;
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Stop(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kStop;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Rest(std::uint64_t botGuid, bool sitDown, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kRest;
+    action.spell_id = sitDown ? 1u : 0u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Train(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kTrain;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Loot(std::uint64_t botGuid, std::uint64_t corpseGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kLoot;
+    action.target_guid = corpseGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::GroupInvite(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGroup;
+    action.spell_id = 1u; // invite
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::GroupAccept(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGroup;
+    action.spell_id = 2u; // accept
+    PublishBotAction(action);
+}
+
+void ModuleClient::GroupLeave(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGroup;
+    action.spell_id = 3u; // leave
+    PublishBotAction(action);
+}
+
+void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (1u << 24) | questId; // operation 1 = accept
+    PublishBotAction(action);
+}
+
+void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (2u << 24) | questId; // operation 2 = hand in
+    PublishBotAction(action);
+}
+
+void ModuleClient::QuestAbandon(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (3u << 24) | questId; // operation 3 = abandon
+    PublishBotAction(action);
+}
+
+void ModuleClient::Teleport(std::uint64_t botGuid, std::uint32_t mapId, float x, float y, float z,
+                            ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kTeleport;
+    action.spell_id = mapId;
+    action.dest_x = x;
+    action.dest_y = y;
+    action.dest_z = z;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Grant(std::uint64_t botGuid, std::uint32_t itemEntry, std::uint32_t count,
+                         ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGrant;
+    action.spell_id = itemEntry;
+    action.dest_x = static_cast<float>(count);
+    PublishBotAction(action);
+}
+
+void ModuleClient::AutoGear(std::uint64_t botGuid, bool tank, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kAutoGear;
+    action.spell_id = tank ? 1u : 0u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::ReleaseSpirit(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kReleaseSpirit;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Resurrect(std::uint64_t botGuid, std::uint64_t resurrecterGuid, bool accept,
+                             ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kResurrect;
+    action.target_guid = resurrecterGuid;
+    action.spell_id = accept ? 0u : 1u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::ReclaimCorpse(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kReclaimCorpse;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Summon(std::uint64_t botGuid, std::uint64_t targetGuid, float spreadIndex,
+                          ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kSummon;
+    action.target_guid = targetGuid;
+    action.dest_x = spreadIndex;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Revive(std::uint64_t botGuid, std::uint64_t resurrecterGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kRevive;
+    action.target_guid = resurrecterGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Mount(std::uint64_t botGuid, bool mountUp, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kMount;
+    action.spell_id = mountUp ? 1u : 0u;
+    PublishBotAction(action);
 }
 
 void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::string const&)> callback)
