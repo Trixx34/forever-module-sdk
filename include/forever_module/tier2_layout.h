@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 11;
+inline constexpr std::uint32_t kTier2LayoutVersion = 12;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -198,7 +198,11 @@ enum class ActionType : std::uint32_t {
     kRevive = 18,        // a chat order: resurrect the dead bot (corpse or ghost) at 35% health and put it next to the player target_guid names (as kSummon).
                          // Refused on a hardcore realm. Needs Bot.Chat.Orders.Enabled.
     kMount = 19,         // spell_id 1 mounts the bot on its fastest learned ground mount, 0 dismounts it. Refused in combat.
-    kLastActionType = kMount, // the highest valid value; PublishActions refuses anything above it
+    kCraft = 20,         // craft using a profession spell: spell_id = the profession spell/recipe id,
+                         // target_guid = optional unit or object target (0 = self). Refused in combat.
+    kGather = 21,        // gather a node (herb, ore, etc.): target_guid = the node/object unit reference,
+                         // spell_id = the gathering spell id (optional). Refused in combat.
+    kLastActionType = kGather, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

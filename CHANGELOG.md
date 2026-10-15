@@ -1,5 +1,10 @@
 # Changelog
 
+## Layout 12 / protocol 6 (crafting and gathering)
+
+- `ActionType` gains `kCraft` (20) and `kGather` (21); `kLastActionType` is now `kGather`.
+  `kProtocolVersion` bumped from "5" to "6". A module built against layout 11 is refused at region attach.
+
 ## Layout 11 / protocol 5 (dead-bot recovery, breaking for layout 10 modules)
 
 - `BotSnapshot` gains `life_state` (0 alive, 1 dead, 2 ghost), `corpse_valid`, `corpse_map`, `corpse_x/y/z`, `reclaim_wait_ms` and `resurrect_from`.

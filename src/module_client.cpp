@@ -623,6 +623,26 @@ void ModuleClient::Mount(std::uint64_t botGuid, bool mountUp, ActionCallback onR
     PublishBotAction(action);
 }
 
+void ModuleClient::Craft(std::uint64_t botGuid, std::uint32_t spellId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kCraft;
+    action.spell_id = spellId; // profession spell / recipe id
+    PublishBotAction(action);
+}
+
+void ModuleClient::Gather(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGather;
+    action.target_guid = targetGuid; // node/object unit reference
+    PublishBotAction(action);
+}
+
 void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::string const&)> callback)
 {
     revokedCallback_ = std::move(callback);
