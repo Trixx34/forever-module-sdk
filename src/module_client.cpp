@@ -4,6 +4,7 @@
 #include "forever_module/tier2_session.h"
 
 #include <array>
+#include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cstring>
@@ -14,45 +15,16 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
-#else
-#include <cerrno>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
 #endif
 
-#ifdef __linux__
-#include <sys/prctl.h>
-#endif
-#ifndef _WIN32
-#include <sys/select.h>
-#endif
+#include <boost/asio.hpp>
+
+namespace ba = boost::asio;
+namespace local = boost::asio::local;
 
 namespace forever_module {
 
 namespace {
-
-// Blocking Unix-domain socket I/O. POSIX uses AF_UNIX directly; Windows uses AF_UNIX through Winsock,
-// which needs Windows 10 1803 or later.
-#ifdef _WIN32
-using SocketHandle = SOCKET;
-constexpr SocketHandle kInvalidSocket = INVALID_SOCKET;
-
-// AF_UNIX and sockaddr_un are not in every Windows SDK header set.
-#ifndef AF_UNIX
-#define AF_UNIX 1
-#endif
-struct SockAddrUn
-{
-    unsigned short sun_family;
-    char sun_path[108];
-};
-#else
-using SocketHandle = int;
-constexpr SocketHandle kInvalidSocket = -1;
-using SockAddrUn = sockaddr_un;
-#endif
 
 bool StartSockets()
 {
@@ -71,113 +43,16 @@ bool StartSockets()
 #endif
 }
 
-void CloseSocket(SocketHandle fd)
-{
-#ifdef _WIN32
-    ::closesocket(fd);
-#else
-    ::close(fd);
-#endif
-}
-
-SocketHandle OpenUnixSocket(std::string const& path)
-{
-    SocketHandle fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd == kInvalidSocket)
-        return kInvalidSocket;
-
-    SockAddrUn addr{};
-    addr.sun_family = AF_UNIX;
-    if (path.size() >= sizeof(addr.sun_path))
-    {
-        CloseSocket(fd);
-        return kInvalidSocket;
-    }
-    std::strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
-    if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0)
-    {
-        CloseSocket(fd);
-        return kInvalidSocket;
-    }
-    return fd;
-}
-
-// Reads exactly `length` bytes. False on error, timeout (SO_RCVTIMEO) or peer close.
-bool ReadAll(SocketHandle fd, void* buffer, std::size_t length)
-{
-    auto* out = static_cast<char*>(buffer);
-    while (length > 0)
-    {
-#ifdef _WIN32
-        int const n = ::recv(fd, out, static_cast<int>(length), 0);
-#else
-        ssize_t const n = ::recv(fd, out, length, 0);
-        if (n < 0 && errno == EINTR)
-            continue;
-#endif
-        if (n <= 0)
-            return false;
-        out += n;
-        length -= static_cast<std::size_t>(n);
-    }
-    return true;
-}
-
-bool WriteAll(SocketHandle fd, void const* buffer, std::size_t length)
-{
-    auto const* in = static_cast<char const*>(buffer);
-    while (length > 0)
-    {
-#ifdef _WIN32
-        int const n = ::send(fd, in, static_cast<int>(length), 0);
-#else
-        ssize_t const n = ::send(fd, in, length, MSG_NOSIGNAL);
-        if (n < 0 && errno == EINTR)
-            continue;
-#endif
-        if (n <= 0)
-            return false;
-        in += n;
-        length -= static_cast<std::size_t>(n);
-    }
-    return true;
-}
-
-void SetReceiveTimeout(SocketHandle fd, std::chrono::milliseconds timeout)
-{
-#ifdef _WIN32
-    DWORD const ms = static_cast<DWORD>(timeout.count());
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char const*>(&ms), sizeof(ms));
-#else
-    timeval tv{};
-    tv.tv_sec = static_cast<time_t>(timeout.count() / 1000);
-    tv.tv_usec = static_cast<suseconds_t>((timeout.count() % 1000) * 1000);
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-#endif
-}
-
-// Unblocks a read in another thread: both directions shut down, so a pending recv returns 0.
-void ShutdownSocket(SocketHandle fd)
-{
-#ifdef _WIN32
-    ::shutdown(fd, SD_BOTH);
-#else
-    ::shutdown(fd, SHUT_RDWR);
-#endif
-}
-
 } // namespace
 
 struct ModuleClient::Transport
 {
-    SocketHandle socket = kInvalidSocket;
+    ba::io_context ioContext;
+    local::stream_protocol::socket socket;
     std::mutex writeMutex; // serializes writes from the heartbeat thread and the Run() thread
 
-    ~Transport()
-    {
-        if (socket != kInvalidSocket)
-            CloseSocket(socket);
-    }
+    Transport() : socket(ioContext) {}
+    ~Transport() = default;
 };
 
 struct ModuleClient::HeartbeatState
@@ -231,7 +106,7 @@ bool ModuleClient::Connect(std::string const& endpoint)
 
     // The core may close its end while we are writing (e.g. during a crash or shutdown). Turn the
     // resulting SIGPIPE into an EPIPE error we can handle. This is process-wide, which is acceptable
-    // because the module runs as its own process. Windows has no SIGPIPE; MSG_NOSIGNAL is POSIX only.
+    // because the module runs as its own process. Windows has no SIGPIPE.
 #ifndef _WIN32
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -240,8 +115,9 @@ bool ModuleClient::Connect(std::string const& endpoint)
         return false;
 
     transport_ = std::make_unique<Transport>();
-    transport_->socket = OpenUnixSocket(endpoint);
-    if (transport_->socket == kInvalidSocket)
+    boost::system::error_code ec;
+    transport_->socket.connect(local::stream_protocol::endpoint(endpoint), ec);
+    if (ec)
     {
         transport_.reset();
         return false;
@@ -251,14 +127,14 @@ bool ModuleClient::Connect(std::string const& endpoint)
 
 bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 {
-    if (!transport_ || transport_->socket == kInvalidSocket)
+    if (!transport_)
     {
         rejectionReason_ = "not connected";
         return false;
     }
 
-    // Bound the blocking reads below by the handshake timeout. Cleared again before returning.
-    SetReceiveTimeout(transport_->socket, timeout);
+    // Bound the blocking reads below by the handshake timeout via the socket's receive timeout.
+    transport_->socket.set_option(ba::socket_base::receive_timeout(timeout));
 
     HandshakeRequest request;
     request.set_module_name(manifest_.module_name);
@@ -275,10 +151,14 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 
     Envelope out;
     *out.mutable_handshake_request() = request;
+    auto clearTimeout = [this] {
+        transport_->socket.set_option(ba::socket_base::receive_timeout(std::chrono::hours(1)));
+    };
+
     if (!WriteEnvelope(out))
     {
         rejectionReason_ = "failed to send HandshakeRequest";
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -286,7 +166,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     if (!ReadEnvelope(in) || in.payload_case() != Envelope::kHandshakeResponse)
     {
         rejectionReason_ = "no HandshakeResponse within timeout";
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -294,7 +174,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     if (!response.accepted())
     {
         rejectionReason_ = response.reason();
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -309,7 +189,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     if (!ReadEnvelope(in) || in.payload_case() != Envelope::kModuleConfig)
     {
         rejectionReason_ = "expected ModuleConfig after HandshakeResponse";
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -318,7 +198,9 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
         config_[entry.key()] = entry.value();
     haveConfig_ = true;
 
-    SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+    // Clear the handshake receive timeout so Run() can block indefinitely on the socket. A zero
+    // timeout can mean "poll immediately" on some platforms, so use a long duration instead.
+    transport_->socket.set_option(ba::socket_base::receive_timeout(std::chrono::hours(1)));
     rejectionReason_.clear();
     return true;
 }
@@ -497,20 +379,12 @@ namespace {
 
 // Waits until the socket has data or the timeout passes. Returns false only on timeout; a failed wait reports true, so
 // the read after it sees the failure.
-bool WaitReadable(SocketHandle socket, std::chrono::milliseconds timeout)
+bool WaitReadable(local::stream_protocol::socket& socket, std::chrono::milliseconds timeout)
 {
-    fd_set readable;
-    FD_ZERO(&readable);
-    FD_SET(socket, &readable);
-    timeval wait;
-    wait.tv_sec = static_cast<decltype(wait.tv_sec)>(timeout.count() / 1000);
-    wait.tv_usec = static_cast<decltype(wait.tv_usec)>((timeout.count() % 1000) * 1000);
-#ifdef _WIN32
-    int const ready = ::select(0, &readable, nullptr, nullptr, &wait);
-#else
-    int const ready = ::select(socket + 1, &readable, nullptr, nullptr, &wait);
-#endif
-    return ready != 0;
+    boost::system::error_code ec;
+    socket.wait(local::stream_protocol::socket::wait_read, timeout, ec);
+    // ec == timed_out means nothing is readable yet. Any other result (success or error) means proceed to read.
+    return ec != ba::error::timed_out;
 }
 
 } // namespace
@@ -546,7 +420,7 @@ void ModuleClient::FireDueTimers(std::chrono::steady_clock::time_point now)
 
 void ModuleClient::Run()
 {
-    if (!transport_ || transport_->socket == kInvalidSocket)
+    if (!transport_)
         return;
 
     StartHeartbeat();
@@ -559,7 +433,8 @@ void ModuleClient::Run()
     while (!stopping_)
     {
         // With no timers the read simply blocks. With timers, wait for data up to the next timer, then fire the timers.
-        if (!timers_.empty() && !WaitReadable(transport_->socket, UntilNextTimer(std::chrono::steady_clock::now())))
+        auto const now = std::chrono::steady_clock::now();
+        if (!timers_.empty() && !WaitReadable(transport_->socket, UntilNextTimer(now)))
         {
             FireDueTimers(std::chrono::steady_clock::now());
             continue;
@@ -577,15 +452,21 @@ void ModuleClient::Shutdown()
 {
     stopping_ = true;
 
-    // Unblocks a read in Run() from another thread: shutdown(2) makes the pending read return EOF.
-    if (transport_ && transport_->socket != kInvalidSocket)
-        ShutdownSocket(transport_->socket);
+    // Unblocks a read in Run() from another thread: shutdown(2) makes the pending recv return EOF
+    // and makes wait_read return readable. The socket itself is closed when Transport is destroyed.
+    if (transport_)
+    {
+        boost::system::error_code ec;
+        transport_->socket.shutdown(local::stream_protocol::socket::shutdown_both, ec);
+    }
 }
 
 bool ModuleClient::ReadEnvelope(Envelope& envelope)
 {
     std::array<std::uint8_t, 4> header{};
-    if (!ReadAll(transport_->socket, header.data(), header.size()))
+    boost::system::error_code ec;
+    ba::read(transport_->socket, ba::buffer(header), ec);
+    if (ec)
         return false;
 
     std::uint32_t const length = DecodeLength(header);
@@ -593,7 +474,8 @@ bool ModuleClient::ReadEnvelope(Envelope& envelope)
         return false;
 
     std::string body(length, '\0');
-    if (!ReadAll(transport_->socket, body.data(), body.size()))
+    ba::read(transport_->socket, ba::buffer(body), ec);
+    if (ec)
         return false;
 
     return envelope.ParseFromString(body);
@@ -608,12 +490,16 @@ bool ModuleClient::WriteEnvelope(Envelope const& envelope)
     std::array<std::uint8_t, 4> header{};
     EncodeLength(static_cast<std::uint32_t>(body.size()), header);
 
-    // One buffer, so the header and body cannot interleave with another writer's frame.
-    std::string frame(reinterpret_cast<char const*>(header.data()), header.size());
-    frame += body;
+    // Two buffers written in one call, so the header and body cannot interleave with another writer's frame.
+    std::array<ba::const_buffer, 2> buffers{
+        ba::buffer(header),
+        ba::buffer(body),
+    };
 
     std::lock_guard<std::mutex> lock(transport_->writeMutex);
-    return WriteAll(transport_->socket, frame.data(), frame.size());
+    boost::system::error_code ec;
+    ba::write(transport_->socket, buffers, ec);
+    return !ec;
 }
 
 void ModuleClient::StartHeartbeat()
