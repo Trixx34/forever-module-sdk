@@ -178,6 +178,8 @@ public:
     void Mount(std::uint64_t botGuid, bool mountUp, ActionCallback onReply = nullptr);
     void Craft(std::uint64_t botGuid, std::uint32_t spellId, ActionCallback onReply = nullptr);
     void Gather(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply = nullptr);
+    void PetCommand(std::uint64_t botGuid, std::uint32_t cmd, std::uint64_t targetGuid = 0,
+                    ActionCallback onReply = nullptr);
 
     // Module store (doc 15): key/value rows private to this module, kept in the world database. Replies arrive like
     // other action replies. StoreGet sets found and value; StoreDelete sets found (the key existed); StoreList fills keys.

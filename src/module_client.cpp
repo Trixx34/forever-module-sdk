@@ -643,6 +643,19 @@ void ModuleClient::Gather(std::uint64_t botGuid, std::uint64_t targetGuid, Actio
     PublishBotAction(action);
 }
 
+void ModuleClient::PetCommand(std::uint64_t botGuid, std::uint32_t cmd, std::uint64_t targetGuid,
+                              ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kPetCommand;
+    action.spell_id = cmd; // 1 attack target_guid, 2 follow, 3 stay; 4 = stance in dest_x
+    if (targetGuid != 0)
+        action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
 void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::string const&)> callback)
 {
     revokedCallback_ = std::move(callback);

@@ -1,5 +1,28 @@
 # Changelog
 
+## Layout 13 / protocol 7 (auras, pets, vendor guids, and policy facts)
+
+- `BotSnapshot` gains `aura_count` and `auras[kMaxAuras]` (16, `AuraEntry`: spell_id, remaining_ms, stacks) — the aura
+  list replaces the module's DOT and buff timers. `NearbyUnit` gains `aura_count` and `aura_mask` (a coarse summary, the
+  bit assignment is core-defined and fixed per layout).
+- `BotSnapshot` gains `casting_target` (the target of the cast in progress, 0 = self) for heal claims and assist targeting.
+- `BotSnapshot` gains `pet_guid`, `pet_health`, `pet_max_health` and `pet_state` (0 none, 1 alive, 2 dead), and
+  `ActionType` gains `kPetCommand` (22): spell_id 1 = attack target_guid, 2 = follow the bot, 3 = stay, 4 = stance
+  (stance in dest_x). `kLastActionType` is now `kPetCommand`. **Note: kPetCommand is 22, not 20 — kCraft (20) and
+  kGather (21) were added in layout 12.**
+- `BotSnapshot` gains `vendor_guid`, `repair_guid` and `auctioneer_guid`, so vendor buying, repair and the auction house
+  no longer have to take an NPC's guid from the nearby list.
+- `BotSnapshot` gains `copper` (money in copper) and `bag_free_slots`, for buy and hand-in pre-checks.
+- `BotSnapshot` gains `last_target_lost_reason` (0 none, 1 killed, 2 leashed, 3 despawned, 4 another player), so a
+  fight_end reason=target_gone can be split into its causes.
+- `ActionReply` gains `copper_spent` (BuyItem: money taken from the player) and `item_entry` / `auction_guid`
+  (AuctionHouse kList: the auction core created).
+- `PlayerScript.OnAuctionResult` (`AuctionListingEvent`, events.proto field 17): one event per matching auction of a
+  browse, carrying auction_guid, item_entry, count, bid, buyout, time_left_min, seller, query_item and total_matches.
+- `ModuleClient::PetCommand(botGuid, cmd, targetGuid)` publishes the new `kPetCommand`. `BuyItem` and `AuctionHouse`
+  are Tier 1 actions and were already in protocol 6.
+- `kProtocolVersion` bumped from "6" to "7". A module built against layout 12 is refused at region attach.
+
 ## Layout 12 / protocol 6 (crafting and gathering)
 
 - `ActionType` gains `kCraft` (20) and `kGather` (21); `kLastActionType` is now `kGather`.

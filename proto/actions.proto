@@ -112,4 +112,7 @@ message ActionReply {
   optional bytes value = 6;          // StoreGet: the stored value when found
   repeated string keys = 7;          // StoreList: the matching keys, sorted
   optional uint32 recipients = 8;    // ShareQuestItem: how many party members were given the item
+  optional uint64 copper_spent = 9;  // BuyItem only: money taken from the player
+  optional uint32 item_entry = 10;   // AuctionHouse kList: the entry of the auction created, to correlate with results
+  optional uint64 auction_guid = 11; // AuctionHouse kList: the guid of the auction core created
 }

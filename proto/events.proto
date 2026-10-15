@@ -43,6 +43,20 @@ message PlayerChatEvent {
   optional uint64 target_ref = 9;
 }
 
+// One auction listing from an auction house browse (PlayerScript.OnAuctionResult). Sent for each
+// matching auction, one event per listing, so a busy browse does not need a huge single frame.
+message AuctionListingEvent {
+  optional uint64 auction_guid = 1;    // the AH auction id (use for bid/buyout/cancel)
+  optional uint32 item_entry = 2;
+  optional uint32 count = 3;           // stack size of the listing
+  optional uint32 bid = 4;             // current bid, copper
+  optional uint32 buyout = 5;          // buyout price, copper (0 = no buyout)
+  optional uint32 time_left_min = 6;   // minutes until the listing expires
+  optional string seller = 7;          // seller name, when the AH exposes it
+  optional uint32 query_item = 8;      // the item_entry the browse asked for
+  optional uint32 total_matches = 9;   // total listings matching the browse query
+}
+
 message WorldStartupEvent {
 }
 
@@ -64,6 +78,7 @@ message EventNotify {
     AccountLoginEvent account_login = 14;
     PlayerItemLootedEvent player_item_looted = 15;
     PlayerChatEvent player_chat = 16;
+    AuctionListingEvent player_auction_result = 17;
   }
 }
 

@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 12;
+inline constexpr std::uint32_t kTier2LayoutVersion = 13;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -41,6 +41,11 @@ struct NearbyUnit {
     std::uint32_t level = 0;   // layout 4
     std::uint8_t elite = 0;    // 1 for an elite creature or boss (layout 4)
     std::uint8_t casting = 0;  // 1 while the unit is casting a spell (layout 4)
+    // Layout 13: auras on this unit. aura_mask is a coarse summary the core encodes so a module can tell
+    // "has a DOT" / "has a poison" without filling a per-unit aura array; aura_count is the number of
+    // auras the core chose to report on it. Mask bit assignment is core-defined and fixed per layout.
+    std::uint32_t aura_count = 0;
+    std::uint32_t aura_mask = 0;
 };
 
 // What happened to a bot's action in the last action set the core applied. Reported in the next snapshot.
@@ -64,6 +69,17 @@ enum class BotActionStatus : std::uint8_t {
 struct SpellCooldown {
     std::uint32_t spell_id = 0;
     std::uint32_t remaining_ms = 0;
+};
+
+// Layout 13: one aura on a bot (a buff, debuff, DOT or poison the core reports). remaining_ms is the time
+// left; an aura with no duration uses a large sentinel (core's choice, e.g. 0xFFFFFFFF). stacks is the
+// stack count (1 when it does not stack). spell_id 0 marks an unused slot.
+inline constexpr std::size_t kMaxAuras = 16;
+
+struct AuraEntry {
+    std::uint32_t spell_id = 0;
+    std::uint32_t remaining_ms = 0;
+    std::uint32_t stacks = 0;
 };
 
 // Layout 8: one quest in a bot's quest log (M5). status: 1 incomplete, 2 complete (ready to hand in), 3 failed. counts[i] is the
@@ -151,6 +167,32 @@ struct BotSnapshot {
     float corpse_z = 0.0f;
     std::uint32_t reclaim_wait_ms = 0;
     std::uint64_t resurrect_from = 0;
+    // Layout 13: policy facts the module currently has to infer (see the forever-bots report
+    // core-sdk-requests §2). Appended at the end of the struct on purpose: earlier fields keep their
+    // meaning so the layout history reads in order.
+    //
+    // auras: every aura the core reports on the bot, the first aura_count entries of auras[] (an
+    // unused slot has spell_id 0). Replaces the module's DOT and buff timers.
+    std::uint32_t aura_count = 0;
+    AuraEntry auras[kMaxAuras] = {};
+    // The target of the cast in progress (a unit reference, 0 = self): heal claims and assist targeting.
+    std::uint64_t casting_target = 0;
+    // The bot's own pet (a unit reference, 0 = none). pet_state is 0 none, 1 alive, 2 dead.
+    std::uint64_t pet_guid = 0;
+    std::uint32_t pet_health = 0;
+    std::uint32_t pet_max_health = 0;
+    std::uint32_t pet_state = 0;
+    // Guids for the interactions that used to be position-only: vendor buying (BuyItem) and repair
+    // need the NPC's guid, not just a position taken from nearby units.
+    std::uint64_t vendor_guid = 0;
+    std::uint64_t repair_guid = 0;
+    std::uint64_t auctioneer_guid = 0;
+    // Money in copper and free bag slots, for buy and hand-in pre-checks.
+    std::uint64_t copper = 0;
+    std::uint32_t bag_free_slots = 0;
+    // Why the bot lost its last target, so a fight_end reason=target_gone can be split into the four
+    // causes the module cannot tell apart: 0 none, 1 killed, 2 leashed, 3 despawned, 4 another player.
+    std::uint32_t last_target_lost_reason = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -202,7 +244,10 @@ enum class ActionType : std::uint32_t {
                          // target_guid = optional unit or object target (0 = self). Refused in combat.
     kGather = 21,        // gather a node (herb, ore, etc.): target_guid = the node/object unit reference,
                          // spell_id = the gathering spell id (optional). Refused in combat.
-    kLastActionType = kGather, // the highest valid value; PublishActions refuses anything above it
+    kPetCommand = 22,    // command the bot's pet (layout 13). spell_id 1 = attack target_guid, 2 = follow the bot,
+                         // 3 = stay; 4 = set stance (spell_id 4, dest_x = the stance value). Refused in combat
+                         // and when the bot has no pet (status kInvalidTarget).
+    kLastActionType = kPetCommand, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
@@ -278,6 +323,8 @@ static_assert(std::atomic<std::uint8_t>::is_always_lock_free, "published_*_buffe
 
 static_assert(std::is_standard_layout_v<NearbyUnit> && std::is_trivially_copyable_v<NearbyUnit>,
               "NearbyUnit must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<AuraEntry> && std::is_trivially_copyable_v<AuraEntry>,
+              "AuraEntry must be POD for shared-memory use");
 static_assert(std::is_standard_layout_v<BotSnapshot> && std::is_trivially_copyable_v<BotSnapshot>,
               "BotSnapshot must be POD for shared-memory use");
 static_assert(std::is_standard_layout_v<WorldTickSnapshotHeader> && std::is_trivially_copyable_v<WorldTickSnapshotHeader>,
