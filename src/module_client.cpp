@@ -4,6 +4,7 @@
 #include "forever_module/tier2_session.h"
 
 #include <array>
+#include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cstring>
@@ -14,45 +15,16 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
-#else
-#include <cerrno>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
 #endif
 
-#ifdef __linux__
-#include <sys/prctl.h>
-#endif
-#ifndef _WIN32
-#include <sys/select.h>
-#endif
+#include <boost/asio.hpp>
+
+namespace ba = boost::asio;
+namespace local = boost::asio::local;
 
 namespace forever_module {
 
 namespace {
-
-// Blocking Unix-domain socket I/O. POSIX uses AF_UNIX directly; Windows uses AF_UNIX through Winsock,
-// which needs Windows 10 1803 or later.
-#ifdef _WIN32
-using SocketHandle = SOCKET;
-constexpr SocketHandle kInvalidSocket = INVALID_SOCKET;
-
-// AF_UNIX and sockaddr_un are not in every Windows SDK header set.
-#ifndef AF_UNIX
-#define AF_UNIX 1
-#endif
-struct SockAddrUn
-{
-    unsigned short sun_family;
-    char sun_path[108];
-};
-#else
-using SocketHandle = int;
-constexpr SocketHandle kInvalidSocket = -1;
-using SockAddrUn = sockaddr_un;
-#endif
 
 bool StartSockets()
 {
@@ -71,113 +43,16 @@ bool StartSockets()
 #endif
 }
 
-void CloseSocket(SocketHandle fd)
-{
-#ifdef _WIN32
-    ::closesocket(fd);
-#else
-    ::close(fd);
-#endif
-}
-
-SocketHandle OpenUnixSocket(std::string const& path)
-{
-    SocketHandle fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd == kInvalidSocket)
-        return kInvalidSocket;
-
-    SockAddrUn addr{};
-    addr.sun_family = AF_UNIX;
-    if (path.size() >= sizeof(addr.sun_path))
-    {
-        CloseSocket(fd);
-        return kInvalidSocket;
-    }
-    std::strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
-    if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0)
-    {
-        CloseSocket(fd);
-        return kInvalidSocket;
-    }
-    return fd;
-}
-
-// Reads exactly `length` bytes. False on error, timeout (SO_RCVTIMEO) or peer close.
-bool ReadAll(SocketHandle fd, void* buffer, std::size_t length)
-{
-    auto* out = static_cast<char*>(buffer);
-    while (length > 0)
-    {
-#ifdef _WIN32
-        int const n = ::recv(fd, out, static_cast<int>(length), 0);
-#else
-        ssize_t const n = ::recv(fd, out, length, 0);
-        if (n < 0 && errno == EINTR)
-            continue;
-#endif
-        if (n <= 0)
-            return false;
-        out += n;
-        length -= static_cast<std::size_t>(n);
-    }
-    return true;
-}
-
-bool WriteAll(SocketHandle fd, void const* buffer, std::size_t length)
-{
-    auto const* in = static_cast<char const*>(buffer);
-    while (length > 0)
-    {
-#ifdef _WIN32
-        int const n = ::send(fd, in, static_cast<int>(length), 0);
-#else
-        ssize_t const n = ::send(fd, in, length, MSG_NOSIGNAL);
-        if (n < 0 && errno == EINTR)
-            continue;
-#endif
-        if (n <= 0)
-            return false;
-        in += n;
-        length -= static_cast<std::size_t>(n);
-    }
-    return true;
-}
-
-void SetReceiveTimeout(SocketHandle fd, std::chrono::milliseconds timeout)
-{
-#ifdef _WIN32
-    DWORD const ms = static_cast<DWORD>(timeout.count());
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char const*>(&ms), sizeof(ms));
-#else
-    timeval tv{};
-    tv.tv_sec = static_cast<time_t>(timeout.count() / 1000);
-    tv.tv_usec = static_cast<suseconds_t>((timeout.count() % 1000) * 1000);
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-#endif
-}
-
-// Unblocks a read in another thread: both directions shut down, so a pending recv returns 0.
-void ShutdownSocket(SocketHandle fd)
-{
-#ifdef _WIN32
-    ::shutdown(fd, SD_BOTH);
-#else
-    ::shutdown(fd, SHUT_RDWR);
-#endif
-}
-
 } // namespace
 
 struct ModuleClient::Transport
 {
-    SocketHandle socket = kInvalidSocket;
+    ba::io_context ioContext;
+    local::stream_protocol::socket socket;
     std::mutex writeMutex; // serializes writes from the heartbeat thread and the Run() thread
 
-    ~Transport()
-    {
-        if (socket != kInvalidSocket)
-            CloseSocket(socket);
-    }
+    Transport() : socket(ioContext) {}
+    ~Transport() = default;
 };
 
 struct ModuleClient::HeartbeatState
@@ -231,7 +106,7 @@ bool ModuleClient::Connect(std::string const& endpoint)
 
     // The core may close its end while we are writing (e.g. during a crash or shutdown). Turn the
     // resulting SIGPIPE into an EPIPE error we can handle. This is process-wide, which is acceptable
-    // because the module runs as its own process. Windows has no SIGPIPE; MSG_NOSIGNAL is POSIX only.
+    // because the module runs as its own process. Windows has no SIGPIPE.
 #ifndef _WIN32
     std::signal(SIGPIPE, SIG_IGN);
 #endif
@@ -240,8 +115,9 @@ bool ModuleClient::Connect(std::string const& endpoint)
         return false;
 
     transport_ = std::make_unique<Transport>();
-    transport_->socket = OpenUnixSocket(endpoint);
-    if (transport_->socket == kInvalidSocket)
+    boost::system::error_code ec;
+    transport_->socket.connect(local::stream_protocol::endpoint(endpoint), ec);
+    if (ec)
     {
         transport_.reset();
         return false;
@@ -251,14 +127,14 @@ bool ModuleClient::Connect(std::string const& endpoint)
 
 bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 {
-    if (!transport_ || transport_->socket == kInvalidSocket)
+    if (!transport_)
     {
         rejectionReason_ = "not connected";
         return false;
     }
 
-    // Bound the blocking reads below by the handshake timeout. Cleared again before returning.
-    SetReceiveTimeout(transport_->socket, timeout);
+    // Bound the blocking reads below by the handshake timeout via the socket's receive timeout.
+    transport_->socket.set_option(ba::socket_base::receive_timeout(timeout));
 
     HandshakeRequest request;
     request.set_module_name(manifest_.module_name);
@@ -275,10 +151,14 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 
     Envelope out;
     *out.mutable_handshake_request() = request;
+    auto clearTimeout = [this] {
+        transport_->socket.set_option(ba::socket_base::receive_timeout(std::chrono::hours(1)));
+    };
+
     if (!WriteEnvelope(out))
     {
         rejectionReason_ = "failed to send HandshakeRequest";
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -286,7 +166,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     if (!ReadEnvelope(in) || in.payload_case() != Envelope::kHandshakeResponse)
     {
         rejectionReason_ = "no HandshakeResponse within timeout";
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -294,7 +174,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     if (!response.accepted())
     {
         rejectionReason_ = response.reason();
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -309,7 +189,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     if (!ReadEnvelope(in) || in.payload_case() != Envelope::kModuleConfig)
     {
         rejectionReason_ = "expected ModuleConfig after HandshakeResponse";
-        SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+        clearTimeout();
         return false;
     }
 
@@ -318,7 +198,9 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
         config_[entry.key()] = entry.value();
     haveConfig_ = true;
 
-    SetReceiveTimeout(transport_->socket, std::chrono::milliseconds(0));
+    // Clear the handshake receive timeout so Run() can block indefinitely on the socket. A zero
+    // timeout can mean "poll immediately" on some platforms, so use a long duration instead.
+    transport_->socket.set_option(ba::socket_base::receive_timeout(std::chrono::hours(1)));
     rejectionReason_.clear();
     return true;
 }
@@ -408,6 +290,57 @@ std::uint64_t ModuleClient::Log(std::uint32_t level, std::string const& text, Ac
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BuyItem(std::uint64_t vendorGuid, std::uint32_t itemEntry,
+                                    std::uint32_t count, ActionCallback onReply)
+{
+    ActionRequest request;
+    BuyItemAction* buy = request.mutable_buy_item();
+    buy->set_vendor_guid(vendorGuid);
+    buy->set_item_entry(itemEntry);
+    buy->set_count(count);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+void ModuleClient::Vendor(std::uint64_t botGuid, std::uint64_t vendorGuid, std::uint32_t spellId,
+                          ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kVendor;
+    action.spell_id = spellId; // bitmask: 1 sell, 2 repair, 4 equip
+    action.target_guid = vendorGuid;
+    PublishBotAction(action);
+}
+
+std::uint64_t ModuleClient::AuctionHouse(AuctionHouseOp op, std::uint64_t auctioneerGuid,
+                                         std::uint64_t itemGuid, std::uint64_t auctionGuid,
+                                         std::uint32_t itemEntry, std::uint32_t count,
+                                         std::uint32_t bid, std::uint32_t buyout,
+                                         ActionCallback onReply)
+{
+    ActionRequest request;
+    AuctionHouseAction* ah = request.mutable_auction_house();
+    ah->set_op(static_cast<std::uint32_t>(op));
+    ah->set_auctioneer_guid(auctioneerGuid);
+    ah->set_item_guid(itemGuid);
+    ah->set_auction_guid(auctionGuid);
+    ah->set_item_entry(itemEntry);
+    ah->set_count(count);
+    ah->set_bid(bid);
+    ah->set_buyout(buyout);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+// Publishes a single bot action through Tier 2. Returns false if the module has no Tier 2 session.
+bool ModuleClient::PublishBotAction(BotAction const& action)
+{
+    if (!tier2_)
+        return false;
+    std::string error;
+    return tier2_->PublishActions({action}, error);
+}
+
 std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::string const& text, ActionCallback onReply)
 {
     ActionRequest request;
@@ -445,6 +378,282 @@ std::uint64_t ModuleClient::StoreList(std::string const& prefix, ActionCallback 
     ActionRequest request;
     request.mutable_store_list()->set_prefix(prefix);
     return RequestAction(std::move(request), std::move(onReply));
+}
+
+// --- Tier 2 bot-action convenience methods ---
+
+void ModuleClient::CastSpell(std::uint64_t botGuid, std::uint32_t spellId, std::uint64_t targetGuid,
+                             ActionCallback onReply)
+{
+    (void)onReply; // Tier 2 actions have no Tier 1 reply; result appears in the next snapshot
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kCastSpell;
+    action.spell_id = spellId;
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::MoveTo(std::uint64_t botGuid, float x, float y, float z, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kMoveTo;
+    action.dest_x = x;
+    action.dest_y = y;
+    action.dest_z = z;
+    PublishBotAction(action);
+}
+
+void ModuleClient::AttackTarget(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kAttackTarget;
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Follow(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kFollow;
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Stop(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kStop;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Rest(std::uint64_t botGuid, bool sitDown, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kRest;
+    action.spell_id = sitDown ? 1u : 0u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Train(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kTrain;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Loot(std::uint64_t botGuid, std::uint64_t corpseGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kLoot;
+    action.target_guid = corpseGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::GroupInvite(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGroup;
+    action.spell_id = 1u; // invite
+    action.target_guid = targetGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::GroupAccept(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGroup;
+    action.spell_id = 2u; // accept
+    PublishBotAction(action);
+}
+
+void ModuleClient::GroupLeave(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGroup;
+    action.spell_id = 3u; // leave
+    PublishBotAction(action);
+}
+
+void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (1u << 24) | questId; // operation 1 = accept
+    PublishBotAction(action);
+}
+
+void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (2u << 24) | questId; // operation 2 = hand in
+    PublishBotAction(action);
+}
+
+void ModuleClient::QuestAbandon(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (3u << 24) | questId; // operation 3 = abandon
+    PublishBotAction(action);
+}
+
+void ModuleClient::Teleport(std::uint64_t botGuid, std::uint32_t mapId, float x, float y, float z,
+                            ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kTeleport;
+    action.spell_id = mapId;
+    action.dest_x = x;
+    action.dest_y = y;
+    action.dest_z = z;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Grant(std::uint64_t botGuid, std::uint32_t itemEntry, std::uint32_t count,
+                         ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGrant;
+    action.spell_id = itemEntry;
+    action.dest_x = static_cast<float>(count);
+    PublishBotAction(action);
+}
+
+void ModuleClient::AutoGear(std::uint64_t botGuid, bool tank, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kAutoGear;
+    action.spell_id = tank ? 1u : 0u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::ReleaseSpirit(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kReleaseSpirit;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Resurrect(std::uint64_t botGuid, std::uint64_t resurrecterGuid, bool accept,
+                             ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kResurrect;
+    action.target_guid = resurrecterGuid;
+    action.spell_id = accept ? 0u : 1u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::ReclaimCorpse(std::uint64_t botGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kReclaimCorpse;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Summon(std::uint64_t botGuid, std::uint64_t targetGuid, float spreadIndex,
+                          ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kSummon;
+    action.target_guid = targetGuid;
+    action.dest_x = spreadIndex;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Revive(std::uint64_t botGuid, std::uint64_t resurrecterGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kRevive;
+    action.target_guid = resurrecterGuid;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Mount(std::uint64_t botGuid, bool mountUp, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kMount;
+    action.spell_id = mountUp ? 1u : 0u;
+    PublishBotAction(action);
+}
+
+void ModuleClient::Craft(std::uint64_t botGuid, std::uint32_t spellId, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kCraft;
+    action.spell_id = spellId; // profession spell / recipe id
+    PublishBotAction(action);
+}
+
+void ModuleClient::Gather(std::uint64_t botGuid, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kGather;
+    action.target_guid = targetGuid; // node/object unit reference
+    PublishBotAction(action);
+}
+
+void ModuleClient::PetCommand(std::uint64_t botGuid, std::uint32_t cmd, std::uint64_t targetGuid,
+                              ActionCallback onReply)
+{
+    (void)onReply;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kPetCommand;
+    action.spell_id = cmd; // 1 attack target_guid, 2 follow, 3 stay; 4 = stance in dest_x
+    if (targetGuid != 0)
+        action.target_guid = targetGuid;
+    PublishBotAction(action);
 }
 
 void ModuleClient::OnControlRevoked(std::function<void(std::uint64_t, std::string const&)> callback)
@@ -497,20 +706,12 @@ namespace {
 
 // Waits until the socket has data or the timeout passes. Returns false only on timeout; a failed wait reports true, so
 // the read after it sees the failure.
-bool WaitReadable(SocketHandle socket, std::chrono::milliseconds timeout)
+bool WaitReadable(local::stream_protocol::socket& socket, std::chrono::milliseconds timeout)
 {
-    fd_set readable;
-    FD_ZERO(&readable);
-    FD_SET(socket, &readable);
-    timeval wait;
-    wait.tv_sec = static_cast<decltype(wait.tv_sec)>(timeout.count() / 1000);
-    wait.tv_usec = static_cast<decltype(wait.tv_usec)>((timeout.count() % 1000) * 1000);
-#ifdef _WIN32
-    int const ready = ::select(0, &readable, nullptr, nullptr, &wait);
-#else
-    int const ready = ::select(socket + 1, &readable, nullptr, nullptr, &wait);
-#endif
-    return ready != 0;
+    boost::system::error_code ec;
+    socket.wait(local::stream_protocol::socket::wait_read, timeout, ec);
+    // ec == timed_out means nothing is readable yet. Any other result (success or error) means proceed to read.
+    return ec != ba::error::timed_out;
 }
 
 } // namespace
@@ -546,7 +747,7 @@ void ModuleClient::FireDueTimers(std::chrono::steady_clock::time_point now)
 
 void ModuleClient::Run()
 {
-    if (!transport_ || transport_->socket == kInvalidSocket)
+    if (!transport_)
         return;
 
     StartHeartbeat();
@@ -559,7 +760,8 @@ void ModuleClient::Run()
     while (!stopping_)
     {
         // With no timers the read simply blocks. With timers, wait for data up to the next timer, then fire the timers.
-        if (!timers_.empty() && !WaitReadable(transport_->socket, UntilNextTimer(std::chrono::steady_clock::now())))
+        auto const now = std::chrono::steady_clock::now();
+        if (!timers_.empty() && !WaitReadable(transport_->socket, UntilNextTimer(now)))
         {
             FireDueTimers(std::chrono::steady_clock::now());
             continue;
@@ -577,15 +779,21 @@ void ModuleClient::Shutdown()
 {
     stopping_ = true;
 
-    // Unblocks a read in Run() from another thread: shutdown(2) makes the pending read return EOF.
-    if (transport_ && transport_->socket != kInvalidSocket)
-        ShutdownSocket(transport_->socket);
+    // Unblocks a read in Run() from another thread: shutdown(2) makes the pending recv return EOF
+    // and makes wait_read return readable. The socket itself is closed when Transport is destroyed.
+    if (transport_)
+    {
+        boost::system::error_code ec;
+        transport_->socket.shutdown(local::stream_protocol::socket::shutdown_both, ec);
+    }
 }
 
 bool ModuleClient::ReadEnvelope(Envelope& envelope)
 {
     std::array<std::uint8_t, 4> header{};
-    if (!ReadAll(transport_->socket, header.data(), header.size()))
+    boost::system::error_code ec;
+    ba::read(transport_->socket, ba::buffer(header), ec);
+    if (ec)
         return false;
 
     std::uint32_t const length = DecodeLength(header);
@@ -593,7 +801,8 @@ bool ModuleClient::ReadEnvelope(Envelope& envelope)
         return false;
 
     std::string body(length, '\0');
-    if (!ReadAll(transport_->socket, body.data(), body.size()))
+    ba::read(transport_->socket, ba::buffer(body), ec);
+    if (ec)
         return false;
 
     return envelope.ParseFromString(body);
@@ -608,12 +817,16 @@ bool ModuleClient::WriteEnvelope(Envelope const& envelope)
     std::array<std::uint8_t, 4> header{};
     EncodeLength(static_cast<std::uint32_t>(body.size()), header);
 
-    // One buffer, so the header and body cannot interleave with another writer's frame.
-    std::string frame(reinterpret_cast<char const*>(header.data()), header.size());
-    frame += body;
+    // Two buffers written in one call, so the header and body cannot interleave with another writer's frame.
+    std::array<ba::const_buffer, 2> buffers{
+        ba::buffer(header),
+        ba::buffer(body),
+    };
 
     std::lock_guard<std::mutex> lock(transport_->writeMutex);
-    return WriteAll(transport_->socket, frame.data(), frame.size());
+    boost::system::error_code ec;
+    ba::write(transport_->socket, buffers, ec);
+    return !ec;
 }
 
 void ModuleClient::StartHeartbeat()
