@@ -69,6 +69,17 @@ message AccountLoginEvent {
   optional uint32 account_id = 1;
 }
 
+// WorldScript.OnStats: the core's periodic sample of the server (Modules.Stats.IntervalSec; off when 0).
+// Counts are taken on the world thread at the moment of the sample. The update diff figures cover the ticks since the last sample.
+message ServerStatsEvent {
+  optional uint32 players_online = 1;      // active sessions that are not bots
+  optional uint32 sessions_queued = 2;     // sessions waiting in the login queue
+  optional uint64 uptime_seconds = 3;      // the worldserver's uptime
+  optional uint32 update_diff_avg_ms = 4;  // mean world update diff
+  optional uint32 update_diff_max_ms = 5;  // largest world update diff
+  optional uint32 update_ticks = 6;        // ticks the two figures above cover
+}
+
 // Fire-and-forget event dispatch (core -> module). Core never blocks on these.
 message EventNotify {
   optional string hook_name = 1;
@@ -81,6 +92,7 @@ message EventNotify {
     PlayerItemLootedEvent player_item_looted = 15;
     PlayerChatEvent player_chat = 16;
     AuctionListingEvent player_auction_result = 17;
+    ServerStatsEvent server_stats = 18;
   }
 }
 
