@@ -55,6 +55,8 @@ std::unique_ptr<bi::shared_memory_object> CreateRegion(std::string const& name, 
     bot->health = 900;
     bot->max_health = 1000;
     bot->nearby_count = 1;
+    bot->ammo_entry = 2512;
+    bot->ammo_count = 200;
     // Nearby units start after the kBots bot slots, kNearby slots per bot.
     auto* nearby = new (reinterpret_cast<std::byte*>(bot + kBots)) NearbyUnit();
     nearby->guid = MakeUnitRef(8, 1234, 77);
@@ -97,6 +99,8 @@ int main()
         {
             CHECK(view.bots[0].guid == 42);
             CHECK(view.bots[0].health == 900);
+            CHECK(view.bots[0].ammo_entry == 2512);
+            CHECK(view.bots[0].ammo_count == 200);
         }
         CHECK(view.NearbyOf(0).size() == 1);
         if (view.NearbyOf(0).size() == 1)

@@ -352,6 +352,19 @@ std::uint64_t ModuleClient::BuyItem(std::uint64_t vendorGuid, std::uint32_t item
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BuyItemForBot(std::uint64_t botGuid, std::uint64_t vendorGuid,
+                                          std::uint32_t itemEntry, std::uint32_t count,
+                                          ActionCallback onReply)
+{
+    ActionRequest request;
+    BuyItemAction* buy = request.mutable_buy_item();
+    buy->set_vendor_guid(vendorGuid);
+    buy->set_item_entry(itemEntry);
+    buy->set_count(count);
+    buy->set_player_guid(botGuid);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 void ModuleClient::Vendor(std::uint64_t botGuid, std::uint64_t vendorGuid, std::uint32_t spellId,
                           ActionCallback onReply)
 {
@@ -380,6 +393,26 @@ std::uint64_t ModuleClient::AuctionHouse(AuctionHouseOp op, std::uint64_t auctio
     ah->set_count(count);
     ah->set_bid(bid);
     ah->set_buyout(buyout);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::AuctionHouseForBot(std::uint64_t botGuid, AuctionHouseOp op,
+                                              std::uint64_t auctioneerGuid, std::uint64_t itemGuid,
+                                              std::uint64_t auctionGuid, std::uint32_t itemEntry,
+                                              std::uint32_t count, std::uint32_t bid,
+                                              std::uint32_t buyout, ActionCallback onReply)
+{
+    ActionRequest request;
+    AuctionHouseAction* ah = request.mutable_auction_house();
+    ah->set_op(static_cast<AuctionHouseAction_AHOp>(static_cast<std::uint32_t>(op)));
+    ah->set_auctioneer_guid(auctioneerGuid);
+    ah->set_item_guid(itemGuid);
+    ah->set_auction_guid(auctionGuid);
+    ah->set_item_entry(itemEntry);
+    ah->set_count(count);
+    ah->set_bid(bid);
+    ah->set_buyout(buyout);
+    ah->set_player_guid(botGuid);
     return RequestAction(std::move(request), std::move(onReply));
 }
 

@@ -121,6 +121,10 @@ public:
     // the item is on its sell list, and the player has enough money.
     std::uint64_t BuyItem(std::uint64_t vendorGuid, std::uint32_t itemEntry, std::uint32_t count,
                           ActionCallback onReply = nullptr);
+    // Actor-aware vendor purchase for a controlled bot. botGuid is the raw character GUID counter from BotSnapshot::guid;
+    // the core verifies ownership and uses that bot's money and inventory.
+    std::uint64_t BuyItemForBot(std::uint64_t botGuid, std::uint64_t vendorGuid, std::uint32_t itemEntry,
+                                std::uint32_t count, ActionCallback onReply = nullptr);
 
     // Vendor services at an NPC within interaction range. spellId bitmask: 1 = sell grey items,
     // 2 = repair, 4 = equip best gear. Refused in combat.
@@ -142,6 +146,13 @@ public:
                                std::uint32_t itemEntry = 0, std::uint32_t count = 0,
                                std::uint32_t bid = 0, std::uint32_t buyout = 0,
                                ActionCallback onReply = nullptr);
+    // Actor-aware AH operation for a controlled bot. Browse results include botGuid and the returned
+    // request id in AuctionListingEvent so concurrent bot queries can be matched to this operation.
+    std::uint64_t AuctionHouseForBot(std::uint64_t botGuid, AuctionHouseOp op, std::uint64_t auctioneerGuid,
+                                     std::uint64_t itemGuid = 0, std::uint64_t auctionGuid = 0,
+                                     std::uint32_t itemEntry = 0, std::uint32_t count = 0,
+                                     std::uint32_t bid = 0, std::uint32_t buyout = 0,
+                                     ActionCallback onReply = nullptr);
 
     // --- Tier 2 bot-action convenience methods ---
     // Each builds a BotAction and publishes it via AttachTier2()->PublishActions(). The reply arrives

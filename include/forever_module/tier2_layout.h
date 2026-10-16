@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 13;
+inline constexpr std::uint32_t kTier2LayoutVersion = 14;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -195,6 +195,12 @@ struct BotSnapshot {
     // Why the bot lost its last target, so a fight_end reason=target_gone can be split into the four
     // causes the module cannot tell apart: 0 none, 1 killed, 2 leashed, 3 despawned, 4 another player.
     std::uint32_t last_target_lost_reason = 0;
+    // Layout 14: ammo state for the equipped ranged weapon. ammo_entry is the selected projectile, or when
+    // none is selected the core's recommended compatible projectile for this weapon/level; 0 means no
+    // ammo-using ranged weapon or no compatible projectile data. ammo_count is the carried-inventory
+    // quantity of ammo_entry (not bank); 0 means the bot needs a supply.
+    std::uint32_t ammo_entry = 0;
+    std::uint32_t ammo_count = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };

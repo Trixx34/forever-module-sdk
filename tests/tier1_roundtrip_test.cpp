@@ -693,6 +693,135 @@ void Report(char const* name, Failures const& fails, int& failedScenarios)
         std::printf("      %s\n", f.c_str());
 }
 
+Failures RunEconomyActorScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("economy-actor");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(12);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+        bool const gotBuy = readAction(in);
+        EXPECT_IN(coreFails, gotBuy);
+        if (gotBuy)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_buy_item());
+            BuyItemAction const& buy = in.action_request().buy_item();
+            EXPECT_IN(coreFails, buy.player_guid() == 42);
+            EXPECT_IN(coreFails, buy.vendor_guid() == 9001 && buy.item_entry() == 2512 && buy.count() == 200);
+            std::uint64_t const id = in.action_request().message_id();
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(id);
+            reply->set_success(true);
+            reply->set_copper_spent(100);
+            reply->set_item_entry(2512);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+
+        bool const gotBrowse = readAction(in);
+        EXPECT_IN(coreFails, gotBrowse);
+        if (gotBrowse)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_auction_house());
+            AuctionHouseAction const& ah = in.action_request().auction_house();
+            std::uint64_t const id = in.action_request().message_id();
+            EXPECT_IN(coreFails, ah.player_guid() == 42);
+            EXPECT_IN(coreFails, ah.op() == AuctionHouseAction::kBrowse && ah.auctioneer_guid() == 9002 && ah.item_entry() == 2512);
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(id);
+            reply->set_success(true);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+            out.Clear();
+            EventNotify* notify = out.mutable_event_notify();
+            notify->set_hook_name("PlayerScript.OnAuctionResult");
+            AuctionListingEvent* listing = notify->mutable_player_auction_result();
+            listing->set_player_guid(42);
+            listing->set_request_id(id);
+            listing->set_auction_guid(777);
+            listing->set_item_entry(2512);
+            listing->set_count(200);
+            listing->set_query_item(2512);
+            listing->set_total_matches(1);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "economy-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "PlayerScript.OnAuctionResult"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    std::uint64_t browseId = 0;
+    bool gotBuyReply = false;
+    bool gotBrowseReply = false;
+    bool gotListing = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        client.BuyItemForBot(42, 9001, 2512, 200, [&](ActionReply const& reply)
+        {
+            gotBuyReply = reply.success() && reply.copper_spent() == 100 && reply.item_entry() == 2512;
+        });
+        browseId = client.AuctionHouseForBot(42, ModuleClient::AuctionHouseOp::kBrowse,
+                                             9002, 0, 0, 2512, 0, 0, 0, [&](ActionReply const& reply)
+        {
+            gotBrowseReply = reply.success();
+        });
+    });
+    client.OnNotify("PlayerScript.OnAuctionResult", [&](EventNotify const& notify)
+    {
+        AuctionListingEvent const& listing = notify.player_auction_result();
+        gotListing = listing.player_guid() == 42 && listing.request_id() == browseId &&
+                     listing.auction_guid() == 777 && listing.item_entry() == 2512 && listing.count() == 200;
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    EXPECT_IN(clientFails, gotBuyReply);
+    EXPECT_IN(clientFails, gotBrowseReply);
+    EXPECT_IN(clientFails, gotListing);
+    core.join();
+    clientFails.insert(clientFails.end(), coreFails.begin(), coreFails.end());
+    return clientFails;
+}
+
 } // namespace
 
 // Share scenario: core sends a quest item loot notify, the module answers it with a ShareQuestItem action, and the fake core replies
@@ -819,5 +948,6 @@ int main()
     Report("control: spawn request, revoke, release", RunControlScenario(), failedScenarios);
     Report("timer fires on the Run() thread while the core is silent", RunTimerScenario(), failedScenarios);
     Report("quest item loot answered with a share action", RunShareScenario(), failedScenarios);
+    Report("vendor/AH purchases carry the bot identity and browse events correlate", RunEconomyActorScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

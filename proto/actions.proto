@@ -33,6 +33,7 @@ message BuyItemAction {
   optional uint64 vendor_guid = 1;
   optional uint32 item_entry = 2;
   optional uint32 count = 3;
+  optional uint64 player_guid = 4; // raw character GUID counter from BotSnapshot.guid; required for a module purchase
 }
 
 // Auction house interaction at an auctioneer NPC. Core re-checks the auction still exists and the
@@ -53,6 +54,7 @@ message AuctionHouseAction {
   optional uint32 count = 6;            // for kList: stack size
   optional uint32 bid = 7;              // copper, for kBid/kList
   optional uint32 buyout = 8;           // copper, for kList
+  optional uint64 player_guid = 9;      // raw character GUID counter from BotSnapshot.guid; required for actions using its money/items
 }
 
 // Writes one line to the core's server log (Server.log), tagged with the module's name. level 0 is info, 1 warning, 2 error; text is

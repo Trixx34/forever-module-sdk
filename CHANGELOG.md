@@ -1,5 +1,11 @@
 # Changelog
 
+## Layout 14 / protocol 8 (ammo replenishment and economy actor identity)
+
+- `BotSnapshot` gains `ammo_entry` (active or core-recommended compatible projectile) and `ammo_count` (carried inventory, not bank).
+- `BuyItemAction` and `AuctionHouseAction` gain `player_guid`, the controlled bot UnitRef whose money/items are used.
+- `AuctionListingEvent` gains `player_guid` and `request_id` so concurrent browse results can be correlated to the requesting bot/action.
+
 ## Layout 13 / protocol 7 (auras, pets, vendor guids, and policy facts)
 
 - `BotSnapshot` gains `aura_count` and `auras[kMaxAuras]` (16, `AuraEntry`: spell_id, remaining_ms, stacks) — the aura
