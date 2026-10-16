@@ -11,10 +11,18 @@
 #include <mutex>
 #include <thread>
 
+#if defined(__linux__)
+#include <sys/prctl.h> // prctl(2) / PR_SET_PDEATHSIG: Linux only
+#include <unistd.h>    // getppid(2)
+#endif
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#else
+#include <poll.h>     // poll(2): the timed readiness wait WaitReadable performs
+#include <sys/time.h> // timeval, the payload of the SO_RCVTIMEO socket option
 #endif
 
 #include <boost/asio.hpp>
@@ -42,6 +50,49 @@ bool StartSockets()
     return true;
 #endif
 }
+
+// Boost removed socket_base::receive_timeout (and send_timeout) in 1.87. This is the same option it
+// described -- SOL_SOCKET/SO_RCVTIMEO carrying a timeval, which Asio hands straight to setsockopt(2)
+// through its socket-option concept -- spelled out here because boost::asio::detail is not part of the
+// SDK's stable surface. Only stream sockets honour it, which is the only kind ModuleClient uses.
+// level/name/data/size are each templated on the protocol, as that concept requires.
+class ReceiveTimeoutOption
+{
+public:
+    explicit ReceiveTimeoutOption(std::chrono::milliseconds timeout)
+    {
+        auto const millis = timeout.count();
+        value_.tv_sec = static_cast<decltype(value_.tv_sec)>(millis / 1000);
+        value_.tv_usec = static_cast<decltype(value_.tv_usec)>((millis % 1000) * 1000);
+    }
+
+    template <typename Protocol>
+    int level(const Protocol&) const
+    {
+        return SOL_SOCKET;
+    }
+
+    template <typename Protocol>
+    int name(const Protocol&) const
+    {
+        return SO_RCVTIMEO;
+    }
+
+    template <typename Protocol>
+    const timeval* data(const Protocol&) const
+    {
+        return &value_;
+    }
+
+    template <typename Protocol>
+    std::size_t size(const Protocol&) const
+    {
+        return sizeof(value_);
+    }
+
+private:
+    timeval value_{};
+};
 
 } // namespace
 
@@ -134,7 +185,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     }
 
     // Bound the blocking reads below by the handshake timeout via the socket's receive timeout.
-    transport_->socket.set_option(ba::socket_base::receive_timeout(timeout));
+    transport_->socket.set_option(ReceiveTimeoutOption(timeout));
 
     HandshakeRequest request;
     request.set_module_name(manifest_.module_name);
@@ -152,7 +203,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     Envelope out;
     *out.mutable_handshake_request() = request;
     auto clearTimeout = [this] {
-        transport_->socket.set_option(ba::socket_base::receive_timeout(std::chrono::hours(1)));
+        transport_->socket.set_option(ReceiveTimeoutOption(std::chrono::hours(1)));
     };
 
     if (!WriteEnvelope(out))
@@ -200,7 +251,7 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 
     // Clear the handshake receive timeout so Run() can block indefinitely on the socket. A zero
     // timeout can mean "poll immediately" on some platforms, so use a long duration instead.
-    transport_->socket.set_option(ba::socket_base::receive_timeout(std::chrono::hours(1)));
+    transport_->socket.set_option(ReceiveTimeoutOption(std::chrono::hours(1)));
     rejectionReason_.clear();
     return true;
 }
@@ -321,7 +372,7 @@ std::uint64_t ModuleClient::AuctionHouse(AuctionHouseOp op, std::uint64_t auctio
 {
     ActionRequest request;
     AuctionHouseAction* ah = request.mutable_auction_house();
-    ah->set_op(static_cast<std::uint32_t>(op));
+    ah->set_op(static_cast<AuctionHouseAction_AHOp>(static_cast<std::uint32_t>(op)));
     ah->set_auctioneer_guid(auctioneerGuid);
     ah->set_item_guid(itemGuid);
     ah->set_auction_guid(auctionGuid);
@@ -708,10 +759,15 @@ namespace {
 // the read after it sees the failure.
 bool WaitReadable(local::stream_protocol::socket& socket, std::chrono::milliseconds timeout)
 {
-    boost::system::error_code ec;
-    socket.wait(local::stream_protocol::socket::wait_read, timeout, ec);
-    // ec == timed_out means nothing is readable yet. Any other result (success or error) means proceed to read.
-    return ec != ba::error::timed_out;
+    // Boost removed wait(wait_type, duration, error_code); poll(2) on the native descriptor is what it
+    // did internally. UntilNextTimer caps the wait at an hour, so the timeout always fits in an int.
+    pollfd descriptor{};
+    descriptor.fd = static_cast<int>(socket.native_handle());
+    descriptor.events = POLLIN;
+
+    // poll returns 0 only when nothing became readable before the timeout. Any other outcome -- readable,
+    // hung up, or a failed poll -- means proceed to read, which reports the real failure.
+    return ::poll(&descriptor, 1, static_cast<int>(timeout.count())) != 0;
 }
 
 } // namespace

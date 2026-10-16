@@ -49,6 +49,14 @@
   item a player looted to the party members who still need it. Additive. Old cores answer it as an unknown action.
 - `ActionType::kLoot` (9): loot the corpse named by `target_guid`. Old cores refuse it as an unknown action type, so it is additive.
   `PublishActions` accepts every type up to `kLoot`.
+- Build fix for Boost 1.87 and newer: `boost::asio::socket_base::receive_timeout` and the timed
+  `basic_socket::wait(wait_type, duration, error_code)` were both removed from Asio, so the SDK did not
+  compile against 1.90. The handshake receive timeout is now set through an equivalent `SO_RCVTIMEO` option
+  spelled out in `module_client.cpp`, and the timed wait uses `poll(2)` on the socket's native descriptor,
+  which is what Asio did internally. Behaviour and wire protocol unchanged; the declared Boost minimum (1.78)
+  still holds and now also builds on 1.90.
+- Build fix: `ModuleClient::AuctionHouse` set the proto's `AuctionHouseAction.op` as a `uint32_t`, but the
+  field is the typed `AHOp` enum, so the call did not compile.
 
 ## Unreleased: log action
 
