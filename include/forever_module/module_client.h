@@ -154,6 +154,29 @@ public:
                                      std::uint32_t bid = 0, std::uint32_t buyout = 0,
                                      ActionCallback onReply = nullptr);
 
+    // A bot speaks: /say (kSay) or a whisper to playerGuid (kWhisper). text is 1 to 255 bytes. The core sends it as the bot's own chat line.
+    enum class SpeakKind : std::uint32_t {
+        kSay = 0,
+        kWhisper = 1,
+    };
+    std::uint64_t BotSpeak(std::uint64_t botGuid, SpeakKind kind, std::uint64_t playerGuid, std::string const& text,
+                           ActionCallback onReply = nullptr);
+
+    // The trade window of a bot. kBegin accepts the trade a player asked for; kSetItem / kClearItem work on a trade slot (0 to 5);
+    // kSetGold offers copper; kAccept presses Trade; kCancel closes the window; kListBags replies with the items the bot can trade
+    // (ActionReply.bag_items). Core runs these through a real player's trade code and re-checks each one when it runs.
+    enum class BotTradeOp : std::uint32_t {
+        kBegin = 0,
+        kSetItem = 1,
+        kClearItem = 2,
+        kSetGold = 3,
+        kAccept = 4,
+        kCancel = 5,
+        kListBags = 6,
+    };
+    std::uint64_t BotTrade(std::uint64_t botGuid, BotTradeOp op, std::uint32_t slot = 0, std::uint64_t itemGuid = 0,
+                           std::uint64_t copper = 0, ActionCallback onReply = nullptr);
+
     // --- Tier 2 bot-action convenience methods ---
     // Each builds a BotAction and publishes it via AttachTier2()->PublishActions(). The reply arrives
     // asynchronously through onReply (if non-null), and the result is also reflected in the bot's

@@ -70,6 +70,42 @@ message SendPlayerMessageAction {
   optional string text = 2;
 }
 
+// A bot speaks. kind 0 is /say (everyone nearby hears it), kind 1 is a whisper to player_guid. The core sends it as the bot's own chat line;
+// text is 1 to 255 bytes. Used for short acknowledgements of a command and for a bot's trade whispers.
+message BotSpeakAction {
+  optional uint64 bot_guid = 1;     // raw character GUID counter from BotSnapshot.guid
+  optional uint32 kind = 2;         // 0 say, 1 whisper
+  optional uint64 player_guid = 3;  // whisper only: raw character GUID counter of the player to whisper
+  optional string text = 4;
+}
+
+// One item a bot could put in a trade. item_guid is what BotTradeAction kSetItem takes.
+message TradeBagItem {
+  optional uint64 item_guid = 1;
+  optional uint32 entry = 2;
+  optional uint32 count = 3;
+  optional string name = 4;         // the item's name in the core's default locale
+}
+
+// The trade window of a bot. Core runs these through the same code a real player's trade uses (so a cancel or a disconnect returns
+// the items), and re-checks everything when the action runs: the trade is still open, the item is still in the bags and can be traded.
+message BotTradeAction {
+  enum TradeOp {
+    kBegin = 0;       // accept the trade a player asked for: the window opens
+    kSetItem = 1;     // put item_guid in trade slot `slot` (0 to 5)
+    kClearItem = 2;   // take the item out of trade slot `slot`
+    kSetGold = 3;     // offer `copper`
+    kAccept = 4;      // press the Trade button (the trade completes when both sides have)
+    kCancel = 5;      // close the window
+    kListBags = 6;    // reply carries bag_items: the bot's items that can be traded now
+  }
+  optional TradeOp op = 1;
+  optional uint64 bot_guid = 2;     // raw character GUID counter from BotSnapshot.guid
+  optional uint32 slot = 3;
+  optional uint64 item_guid = 4;
+  optional uint64 copper = 5;
+}
+
 // Module store (doc 15): rows private to the requesting module, in the world database. The core takes the
 // module from the session, so a request can only reach that module's own rows.
 message StoreGetAction {
@@ -102,6 +138,8 @@ message ActionRequest {
     LogAction log = 17;
     BuyItemAction buy_item = 18;
     AuctionHouseAction auction_house = 19;
+    BotSpeakAction bot_speak = 20;
+    BotTradeAction bot_trade = 21;
   }
 }
 
@@ -117,4 +155,5 @@ message ActionReply {
   optional uint64 copper_spent = 9;  // BuyItem only: money taken from the player
   optional uint32 item_entry = 10;   // AuctionHouse kList: the entry of the auction created, to correlate with results
   optional uint64 auction_guid = 11; // AuctionHouse kList: the guid of the auction core created
+  repeated TradeBagItem bag_items = 12; // BotTrade kListBags: the items the bot can trade now
 }

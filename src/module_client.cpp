@@ -434,6 +434,31 @@ std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::str
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BotSpeak(std::uint64_t botGuid, SpeakKind kind, std::uint64_t playerGuid, std::string const& text,
+                                     ActionCallback onReply)
+{
+    ActionRequest request;
+    BotSpeakAction* speak = request.mutable_bot_speak();
+    speak->set_bot_guid(botGuid);
+    speak->set_kind(static_cast<std::uint32_t>(kind));
+    speak->set_player_guid(playerGuid);
+    speak->set_text(text);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::BotTrade(std::uint64_t botGuid, BotTradeOp op, std::uint32_t slot, std::uint64_t itemGuid,
+                                     std::uint64_t copper, ActionCallback onReply)
+{
+    ActionRequest request;
+    BotTradeAction* trade = request.mutable_bot_trade();
+    trade->set_op(static_cast<BotTradeAction_TradeOp>(static_cast<std::uint32_t>(op)));
+    trade->set_bot_guid(botGuid);
+    trade->set_slot(slot);
+    trade->set_item_guid(itemGuid);
+    trade->set_copper(copper);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::StoreGet(std::string const& key, ActionCallback onReply)
 {
     ActionRequest request;

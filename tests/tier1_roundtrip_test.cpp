@@ -938,6 +938,160 @@ Failures RunShareScenario()
     return all;
 }
 
+// Bot speech and bot trade: the module whispers as a bot, lists the bot's tradeable bags (a reply with items), puts one in a trade slot,
+// and receives a trade event carrying what the partner offers.
+Failures RunBotTradeScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("bot-trade");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(13);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+        auto reply = [&](std::uint64_t id, bool withBags)
+        {
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* r = out.mutable_action_reply();
+            r->set_message_id(id);
+            r->set_success(true);
+            if (withBags)
+            {
+                TradeBagItem* a = r->add_bag_items();
+                a->set_item_guid(1001);
+                a->set_entry(2589);
+                a->set_count(20);
+                a->set_name("Linen Cloth");
+                TradeBagItem* b = r->add_bag_items();
+                b->set_item_guid(1002);
+                b->set_entry(6948);
+                b->set_count(1);
+                b->set_name("Hearthstone");
+            }
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        };
+
+        bool const gotSpeak = readAction(in);
+        EXPECT_IN(coreFails, gotSpeak);
+        if (gotSpeak)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_bot_speak());
+            BotSpeakAction const& speak = in.action_request().bot_speak();
+            EXPECT_IN(coreFails, speak.bot_guid() == 42 && speak.kind() == 1 && speak.player_guid() == 7 && speak.text() == "Hello");
+            reply(in.action_request().message_id(), false);
+        }
+
+        bool const gotList = readAction(in);
+        EXPECT_IN(coreFails, gotList);
+        if (gotList)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_bot_trade());
+            BotTradeAction const& trade = in.action_request().bot_trade();
+            EXPECT_IN(coreFails, trade.op() == BotTradeAction::kListBags && trade.bot_guid() == 42);
+            reply(in.action_request().message_id(), true);
+        }
+
+        bool const gotSet = readAction(in);
+        EXPECT_IN(coreFails, gotSet);
+        if (gotSet)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_bot_trade());
+            BotTradeAction const& trade = in.action_request().bot_trade();
+            EXPECT_IN(coreFails, trade.op() == BotTradeAction::kSetItem && trade.bot_guid() == 42 && trade.slot() == 0 &&
+                                     trade.item_guid() == 1001);
+            reply(in.action_request().message_id(), false);
+        }
+
+        out.Clear();
+        EventNotify* notify = out.mutable_event_notify();
+        notify->set_hook_name("PlayerScript.OnBotTrade");
+        BotTradeEvent* event = notify->mutable_bot_trade();
+        event->set_bot_guid(42);
+        event->set_partner_guid(7);
+        event->set_status(3);
+        event->set_partner_copper(150);
+        TradeOfferedItem* offered = event->add_offered();
+        offered->set_slot(0);
+        offered->set_entry(2589);
+        offered->set_count(5);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "bot-trade-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "PlayerScript.OnBotTrade"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    bool gotSpeakReply = false;
+    bool gotBags = false;
+    bool gotSetReply = false;
+    bool gotEvent = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        client.BotSpeak(42, ModuleClient::SpeakKind::kWhisper, 7, "Hello", [&](ActionReply const& r) { gotSpeakReply = r.success(); });
+        client.BotTrade(42, ModuleClient::BotTradeOp::kListBags, 0, 0, 0, [&](ActionReply const& r)
+        {
+            gotBags = r.success() && r.bag_items_size() == 2 && r.bag_items(0).item_guid() == 1001 && r.bag_items(0).entry() == 2589 &&
+                      r.bag_items(0).count() == 20 && r.bag_items(0).name() == "Linen Cloth" && r.bag_items(1).name() == "Hearthstone";
+            client.BotTrade(42, ModuleClient::BotTradeOp::kSetItem, 0, 1001, 0, [&](ActionReply const& r2) { gotSetReply = r2.success(); });
+        });
+    });
+    client.OnNotify("PlayerScript.OnBotTrade", [&](EventNotify const& notify)
+    {
+        BotTradeEvent const& event = notify.bot_trade();
+        gotEvent = event.bot_guid() == 42 && event.partner_guid() == 7 && event.status() == 3 && event.partner_copper() == 150 &&
+                   event.offered_size() == 1 && event.offered(0).slot() == 0 && event.offered(0).entry() == 2589 && event.offered(0).count() == 5;
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, gotSpeakReply);
+    EXPECT_IN(clientFails, gotBags);
+    EXPECT_IN(clientFails, gotSetReply);
+    EXPECT_IN(clientFails, gotEvent);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 int main()
 {
     int failedScenarios = 0;
@@ -949,5 +1103,6 @@ int main()
     Report("timer fires on the Run() thread while the core is silent", RunTimerScenario(), failedScenarios);
     Report("quest item loot answered with a share action", RunShareScenario(), failedScenarios);
     Report("vendor/AH purchases carry the bot identity and browse events correlate", RunEconomyActorScenario(), failedScenarios);
+    Report("bot speech and bot trade: whisper, list bags, set item, trade event", RunBotTradeScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

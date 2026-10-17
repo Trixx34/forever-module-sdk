@@ -1,5 +1,15 @@
 # Changelog
 
+## Layout 14 / protocol 9 (bot speech and bot trade)
+
+Tier 1 only; the Tier 2 layout is unchanged (still 14).
+
+- `ActionRequest` gains `bot_speak` (20, `BotSpeakAction`: a bot's /say or a whisper to a player) and `bot_trade` (21, `BotTradeAction`: begin, set
+  item, clear item, set gold, accept, cancel, list bags). `ActionReply` gains `bag_items` (12, `TradeBagItem`) for the list-bags reply.
+- `EventNotify` gains `bot_trade` (19, `BotTradeEvent`: a trade request, the window opening, the partner changing or accepting, a cancel, a
+  completion). `server_stats` stays 18.
+- `ModuleClient::BotSpeak` and `ModuleClient::BotTrade`.
+
 ## Layout 14 / protocol 8 (ammo replenishment and economy actor identity)
 
 - `BotSnapshot` gains `ammo_entry` (active or core-recommended compatible projectile) and `ammo_count` (carried inventory, not bank).

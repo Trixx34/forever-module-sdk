@@ -80,6 +80,22 @@ message ServerStatsEvent {
   optional uint32 update_ticks = 6;        // ticks the two figures above cover
 }
 
+// A trade of a bot changed. status: 0 a player asked the bot to trade (answer with BotTradeAction kBegin), 1 the window opened,
+// 2 the partner changed its items or gold, 3 the partner pressed Accept, 4 the trade was cancelled, 5 the trade completed.
+message TradeOfferedItem {
+  optional uint32 slot = 1;
+  optional uint32 entry = 2;
+  optional uint32 count = 3;
+}
+
+message BotTradeEvent {
+  optional uint64 bot_guid = 1;       // raw character GUID counter of the bot
+  optional uint64 partner_guid = 2;   // raw character GUID counter of the player trading with it
+  optional uint32 status = 3;
+  optional uint64 partner_copper = 4; // the gold the partner offers now
+  repeated TradeOfferedItem offered = 5; // what the partner has in the window now
+}
+
 // Fire-and-forget event dispatch (core -> module). Core never blocks on these.
 message EventNotify {
   optional string hook_name = 1;
@@ -93,6 +109,7 @@ message EventNotify {
     PlayerChatEvent player_chat = 16;
     AuctionListingEvent player_auction_result = 17;
     ServerStatsEvent server_stats = 18;
+    BotTradeEvent bot_trade = 19;
   }
 }
 
