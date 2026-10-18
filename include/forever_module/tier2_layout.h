@@ -230,6 +230,15 @@ struct BotSnapshot {
     float goods_vendor_y = 0.0f;
     float goods_vendor_z = 0.0f;
     std::uint64_t goods_vendor_guid = 0;
+    // Reagents (layout 16): the item a spell the bot tried to cast was missing (the core notes it when a cast is refused for lack of reagents), how
+    // many of it the bot carries, and the nearest reachable vendor that sells it. reagent_entry 0: no reagent is missing.
+    std::uint32_t reagent_entry = 0;
+    std::uint32_t reagent_count = 0;
+    std::uint8_t reagent_vendor_valid = 0;
+    float reagent_vendor_x = 0.0f;
+    float reagent_vendor_y = 0.0f;
+    float reagent_vendor_z = 0.0f;
+    std::uint64_t reagent_vendor_guid = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -255,6 +264,7 @@ enum class ActionType : std::uint32_t {
                  // item from the vendor's stock (ammunition the bot's ranged weapon takes; the best food or drink the bot may use at its level)
                  // and buys until the bot carries the target count or its money or bags run out: dest_x is the ammunition target, dest_y the
                  // food target, dest_z the drink target (item counts; 0 = none of that kind). A vendor without the goods is not an error.
+                 // Layout 16: 512 buys the reagent the snapshot names (reagent_entry) up to Bot.Supplies.ReagentTarget pieces.
                  // Layout 16: 64 buy health potions, 128 buy mana potions, 256 buy bandages. Their target counts are the core's settings
                  // (Bot.Supplies.HealthPotionTarget, ManaPotionTarget, BandageTarget), not the action's. The core keeps back a money reserve
                  // (Bot.Supplies.ReserveCopperPerLevel per level) from every purchase except ammunition.

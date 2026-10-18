@@ -6,6 +6,8 @@
   (`goods_vendor_*`).
 - `ActionType::kVendor` buying: `spell_id` bit 64 health potions, 128 mana potions, 256 bandages (counts from the core's settings).
 - `ActionType::kConsume`: `spell_id` 3 health potion, 4 mana potion, 5 bandage.
+- Reagents: `reagent_entry`, `reagent_count` and `reagent_vendor_*` name the item a refused cast was missing (the core notes it when a cast
+  fails for lack of reagents) and the nearest reachable vendor that sells it; `kVendor` bit 512 buys it.
 - The core keeps back a money reserve from purchases (everything except ammunition) and checks that the vendors it reports can be reached on foot.
 
 ## Layout 15 / protocol 10 (bot supplies: ammunition, food and drink)
