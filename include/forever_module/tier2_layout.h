@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 14;
+inline constexpr std::uint32_t kTier2LayoutVersion = 15;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -201,6 +201,23 @@ struct BotSnapshot {
     // quantity of ammo_entry (not bank); 0 means the bot needs a supply.
     std::uint32_t ammo_entry = 0;
     std::uint32_t ammo_count = 0;
+    // Layout 15: supplies (bots buy and use what their play needs).
+    // food_count: the carried food the bot can eat (health food, summed over its stacks). drink_count: the carried drink it can use, 0 for a
+    // class without mana. Only items the bot may use at its level are counted.
+    std::uint32_t food_count = 0;
+    std::uint32_t drink_count = 0;
+    // The nearest vendor on the bot's map that sells ammunition this bot's ranged weapon takes, and the nearest that sells food or drink it
+    // may use (position, valid flag and the unit reference a kVendor action names). Valid 0: the map has none, or the bot needs none.
+    std::uint8_t ammo_vendor_valid = 0;
+    std::uint8_t food_vendor_valid = 0;
+    float ammo_vendor_x = 0.0f;
+    float ammo_vendor_y = 0.0f;
+    float ammo_vendor_z = 0.0f;
+    float food_vendor_x = 0.0f;
+    float food_vendor_y = 0.0f;
+    float food_vendor_z = 0.0f;
+    std::uint64_t ammo_vendor_guid = 0;
+    std::uint64_t food_vendor_guid = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -222,6 +239,10 @@ enum class ActionType : std::uint32_t {
     kRest = 5,   // spell_id 1 sits down to rest, 0 stands up. Refused while the bot is in combat (M2).
     kVendor = 6, // services at an NPC within interaction range (M3). spell_id is a bitmask: 1 sell grey items to a vendor,
                  // 2 repair at a repairman, 4 equip the best gear in the bags. Refused in combat.
+                 // Layout 15, buying (needs Bot.Actions.Supplies in the core): 8 buy ammunition, 16 buy food, 32 buy drink. The core picks the
+                 // item from the vendor's stock (ammunition the bot's ranged weapon takes; the best food or drink the bot may use at its level)
+                 // and buys until the bot carries the target count or its money or bags run out: dest_x is the ammunition target, dest_y the
+                 // food target, dest_z the drink target (item counts; 0 = none of that kind). A vendor without the goods is not an error.
     kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
     kGroup = 8,  // party actions (M8). spell_id 1 invites the bot named by target_guid, 2 accepts the bot's pending invite,
                  // 3 leaves the bot's party. Refused in combat.
@@ -255,7 +276,9 @@ enum class ActionType : std::uint32_t {
     kPetCommand = 22,    // command the bot's pet (layout 13). spell_id 1 = attack target_guid, 2 = follow the bot,
                          // 3 = stay; 4 = set stance (spell_id 4, dest_x = the stance value). Refused in combat
                          // and when the bot has no pet (status kInvalidTarget).
-    kLastActionType = kPetCommand, // the highest valid value; PublishActions refuses anything above it
+    kConsume = 23,       // layout 15: eat or drink. spell_id 1 uses the best food the bot carries, 2 the best drink. The bot sits while it
+                         // restores, as for a player. Refused in combat, when the bot carries none, and unless Bot.Actions.Supplies is on.
+    kLastActionType = kConsume, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

@@ -1,5 +1,14 @@
 # Changelog
 
+## Layout 15 / protocol 10 (bot supplies: ammunition, food and drink)
+
+- `BotSnapshot` gains `food_count`, `drink_count` (what the bot carries and may use) and the nearest vendor that sells its ammunition and the nearest
+  that sells food or drink it may use (`ammo_vendor_*`, `food_vendor_*`: valid flag, x/y/z, unit reference).
+- `ActionType::kVendor` gains buying: `spell_id` bit 8 buys ammunition, 16 food, 32 drink, with the target counts in `dest_x`, `dest_y`, `dest_z`.
+  The core chooses the items from the vendor's stock.
+- `ActionType::kConsume` (23): eat (`spell_id` 1) or drink (2) the best food or drink the bot carries. `kLastActionType` is now `kConsume`.
+- The core now fills `ammo_entry` and `ammo_count` (declared in layout 14 but never set).
+
 ## Layout 14 / protocol 9 (bot speech and bot trade)
 
 Tier 1 only; the Tier 2 layout is unchanged (still 14).

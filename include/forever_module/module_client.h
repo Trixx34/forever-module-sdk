@@ -127,7 +127,8 @@ public:
                                 std::uint32_t count, ActionCallback onReply = nullptr);
 
     // Vendor services at an NPC within interaction range. spellId bitmask: 1 = sell grey items,
-    // 2 = repair, 4 = equip best gear. Refused in combat.
+    // 2 = repair, 4 = equip best gear. Refused in combat. (Buying ammunition, food and drink, bits 8, 16 and 32, is a
+    // Tier 2 action: ActionType::kVendor with the targets in dest_x, dest_y and dest_z.)
     void Vendor(std::uint64_t botGuid, std::uint64_t vendorGuid, std::uint32_t spellId,
                 ActionCallback onReply = nullptr);
 
