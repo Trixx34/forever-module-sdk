@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 15;
+inline constexpr std::uint32_t kTier2LayoutVersion = 16;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -218,6 +218,18 @@ struct BotSnapshot {
     float food_vendor_z = 0.0f;
     std::uint64_t ammo_vendor_guid = 0;
     std::uint64_t food_vendor_guid = 0;
+    // Layout 16: potions and bandages. health_potion_count and mana_potion_count: the carried potions that restore health or mana and that the
+    // bot may use at its level (mana potions: 0 for a class without mana). bandage_count: the carried bandages it may use.
+    std::uint32_t health_potion_count = 0;
+    std::uint32_t mana_potion_count = 0;
+    std::uint32_t bandage_count = 0;
+    // The nearest vendor on the bot's map that sells any of those the bot can use (health potions, mana potions for a mana user, bandages),
+    // reachable on foot as far as the core can tell. Valid 0: the map has none.
+    std::uint8_t goods_vendor_valid = 0;
+    float goods_vendor_x = 0.0f;
+    float goods_vendor_y = 0.0f;
+    float goods_vendor_z = 0.0f;
+    std::uint64_t goods_vendor_guid = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -243,6 +255,9 @@ enum class ActionType : std::uint32_t {
                  // item from the vendor's stock (ammunition the bot's ranged weapon takes; the best food or drink the bot may use at its level)
                  // and buys until the bot carries the target count or its money or bags run out: dest_x is the ammunition target, dest_y the
                  // food target, dest_z the drink target (item counts; 0 = none of that kind). A vendor without the goods is not an error.
+                 // Layout 16: 64 buy health potions, 128 buy mana potions, 256 buy bandages. Their target counts are the core's settings
+                 // (Bot.Supplies.HealthPotionTarget, ManaPotionTarget, BandageTarget), not the action's. The core keeps back a money reserve
+                 // (Bot.Supplies.ReserveCopperPerLevel per level) from every purchase except ammunition.
     kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
     kGroup = 8,  // party actions (M8). spell_id 1 invites the bot named by target_guid, 2 accepts the bot's pending invite,
                  // 3 leaves the bot's party. Refused in combat.
@@ -278,6 +293,9 @@ enum class ActionType : std::uint32_t {
                          // and when the bot has no pet (status kInvalidTarget).
     kConsume = 23,       // layout 15: eat or drink. spell_id 1 uses the best food the bot carries, 2 the best drink. The bot sits while it
                          // restores, as for a player. Refused in combat, when the bot carries none, and unless Bot.Actions.Supplies is on.
+                         // Layout 16: 3 uses the best health potion, 4 the best mana potion (both also allowed in combat; the game's potion
+                         // cooldown applies and is answered as a cooldown refusal), 5 uses the best bandage on the bot (out of combat, the bot stands
+                         // still while it channels; refused while it carries "Recently Bandaged").
     kLastActionType = kConsume, // the highest valid value; PublishActions refuses anything above it
 };
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Layout 16 / protocol 11 (bot supplies 2: potions and bandages)
+
+- `BotSnapshot` gains `health_potion_count`, `mana_potion_count`, `bandage_count` and the nearest reachable vendor that sells any of them
+  (`goods_vendor_*`).
+- `ActionType::kVendor` buying: `spell_id` bit 64 health potions, 128 mana potions, 256 bandages (counts from the core's settings).
+- `ActionType::kConsume`: `spell_id` 3 health potion, 4 mana potion, 5 bandage.
+- The core keeps back a money reserve from purchases (everything except ammunition) and checks that the vendors it reports can be reached on foot.
+
 ## Layout 15 / protocol 10 (bot supplies: ammunition, food and drink)
 
 - `BotSnapshot` gains `food_count`, `drink_count` (what the bot carries and may use) and the nearest vendor that sells its ammunition and the nearest
