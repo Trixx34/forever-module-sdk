@@ -1,5 +1,11 @@
 # Changelog
 
+## Layout 20 / protocol 15 (auction house and vendor sales)
+
+- `BotSnapshot` gains `auctioneer_valid`, `auctioneer_x`, `auctioneer_y` and `auctioneer_z`: the nearest auctioneer the bot's faction may use, on the bot's map, so the module can walk to the house. `auctioneer_guid` (layout 13) is the unit reference an AuctionHouse action names.
+- `ActionType::kSellToVendor` (26): sell items of one entry from the bags to a vendor in reach (`spell_id` = item entry, `dest_x` = count, 0 = all; `target_guid` = vendor, 0 = nearest). `kLastActionType` is now `kSellToVendor`.
+- `AuctionListingEvent` from a kBrowse now carries the browsing bot (`player_guid`, the request's `player_guid` field 9) and the request's `message_id` (`request_id`); the core filled neither before.
+
 ## Layout 19 / protocol 14 (use an object)
 
 - `ActionType::kUseObject` (25): click a door, lever or altar by its entry, or use an item on it (`target_guid` = item entry). Needs `Bot.Actions.UseObject` in the core. `kLastActionType` is now `kUseObject`.

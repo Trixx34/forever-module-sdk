@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 19;
+inline constexpr std::uint32_t kTier2LayoutVersion = 20;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -252,6 +252,12 @@ struct BotSnapshot {
     std::uint16_t profession_skill[2] = { 0, 0 };
     std::uint16_t profession_value[2] = { 0, 0 };
     std::uint16_t profession_max[2] = { 0, 0 };
+    // Layout 20: the auctioneer's position on the bot's map (the nearest one the bot's faction may use, valid 0 when the map has none), so the
+    // module can walk to it. auctioneer_guid, already in the snapshot, is the unit reference an AuctionHouse action names.
+    std::uint8_t auctioneer_valid = 0;
+    float auctioneer_x = 0.0f;
+    float auctioneer_y = 0.0f;
+    float auctioneer_z = 0.0f;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -328,7 +334,11 @@ enum class ActionType : std::uint32_t {
                          // bot must be within 8 yards of it (status kOutOfRange otherwise: walk closer). target_guid, when not 0, is an ITEM ENTRY to use on the object
                          // instead of a click (a key, a charge of powder): the bot is given one if it has none, and casts the item's spell at the object. Refused unless
                          // Bot.Actions.UseObject is on in the core (for scenarios and tests), in combat, dead, or with no such object in reach.
-    kLastActionType = kUseObject, // the highest valid value; PublishActions refuses anything above it
+    kSellToVendor = 26,  // layout 20: sell items of one entry from the bags to a vendor in interaction range. spell_id is the item entry; dest_x the count
+                         // to sell (0 = every one the bot carries of it). target_guid, when not 0, names the vendor NPC (BotSnapshot::vendor_guid is the
+                         // one to use); 0 takes the nearest vendor in reach. Refused in combat, dead, with no vendor in reach, or when the bot has none
+                         // of the entry. Items the vendor will not take are kept and reported as kRefused with a reason.
+    kLastActionType = kSellToVendor, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
