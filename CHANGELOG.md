@@ -1,5 +1,9 @@
 # Changelog
 
+## Layout 19 / protocol 14 (use an object)
+
+- `ActionType::kUseObject` (25): click a door, lever or altar by its entry, or use an item on it (`target_guid` = item entry). Needs `Bot.Actions.UseObject` in the core. `kLastActionType` is now `kUseObject`.
+
 ## Layout 18 / protocol 13 (professions)
 
 - `BotSnapshot` gains `profession_skill[2]`, `profession_value[2]` and `profession_max[2]`: the two primary professions the core assigned to the bot and its skill in each. Only combinations that

@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 18;
+inline constexpr std::uint32_t kTier2LayoutVersion = 19;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -323,7 +323,12 @@ enum class ActionType : std::uint32_t {
                          // (dest_x, dest_y, dest_z) on the bot's own map (spell_id = that map id, which must be the bot's). Every bot knows every flight node and flies free
                          // (Bot.Taxi.Enabled, Bot.Taxi.Free in the core). Refused in combat, on a flight, with no flight master in reach, with no flight path (the faction's
                          // nodes only), or when the flight would not bring the bot at least Bot.Taxi.MinGainYards closer to the point than it is.
-    kLastActionType = kTaxi, // the highest valid value; PublishActions refuses anything above it
+    kUseObject = 25,     // layout 19: use a game object near the bot, as a click would: a door, a lever, an altar, a chest. spell_id is the object's entry; dest_x, dest_y,
+                         // dest_z where it stands (only checked to find the right one among several of an entry: the nearest to the bot within 30 yards is used). The
+                         // bot must be within 8 yards of it (status kOutOfRange otherwise: walk closer). target_guid, when not 0, is an ITEM ENTRY to use on the object
+                         // instead of a click (a key, a charge of powder): the bot is given one if it has none, and casts the item's spell at the object. Refused unless
+                         // Bot.Actions.UseObject is on in the core (for scenarios and tests), in combat, dead, or with no such object in reach.
+    kLastActionType = kUseObject, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
