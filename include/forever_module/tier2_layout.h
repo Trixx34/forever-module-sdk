@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 16;
+inline constexpr std::uint32_t kTier2LayoutVersion = 17;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -239,6 +239,14 @@ struct BotSnapshot {
     float reagent_vendor_y = 0.0f;
     float reagent_vendor_z = 0.0f;
     std::uint64_t reagent_vendor_guid = 0;
+    // Layout 17: flight points. The nearest flight master on the bot's map that the bot can walk to (position, valid flag and the unit reference a kTaxi action
+    // names), and whether the bot is on a flight now (it takes no orders but a kTaxi that ends it; it lands by itself).
+    std::uint8_t taxi_master_valid = 0;
+    std::uint8_t in_flight = 0;
+    float taxi_master_x = 0.0f;
+    float taxi_master_y = 0.0f;
+    float taxi_master_z = 0.0f;
+    std::uint64_t taxi_master_guid = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -306,7 +314,11 @@ enum class ActionType : std::uint32_t {
                          // Layout 16: 3 uses the best health potion, 4 the best mana potion (both also allowed in combat; the game's potion
                          // cooldown applies and is answered as a cooldown refusal), 5 uses the best bandage on the bot (out of combat, the bot stands
                          // still while it channels; refused while it carries "Recently Bandaged").
-    kLastActionType = kConsume, // the highest valid value; PublishActions refuses anything above it
+    kTaxi = 24,          // layout 17: fly from the flight master the bot stands at (target_guid names it; 0 = the nearest in reach) to the flight node nearest to
+                         // (dest_x, dest_y, dest_z) on the bot's own map (spell_id = that map id, which must be the bot's). Every bot knows every flight node and flies free
+                         // (Bot.Taxi.Enabled, Bot.Taxi.Free in the core). Refused in combat, on a flight, with no flight master in reach, with no flight path (the faction's
+                         // nodes only), or when the flight would not bring the bot at least Bot.Taxi.MinGainYards closer to the point than it is.
+    kLastActionType = kTaxi, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

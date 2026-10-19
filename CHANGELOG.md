@@ -1,5 +1,10 @@
 # Changelog
 
+## Layout 17 / protocol 12 (flight points)
+
+- `BotSnapshot` gains `taxi_master_*` (the nearest flight master the bot can walk to: valid flag, x/y/z, unit reference) and `in_flight`.
+- `ActionType::kTaxi` (24): fly from a flight master to the node nearest to a point on the bot's map. Bots know every node and fly free. `kLastActionType` is now `kTaxi`.
+
 ## Layout 16 / protocol 11 (bot supplies 2: potions and bandages)
 
 - `BotSnapshot` gains `health_potion_count`, `mana_potion_count`, `bandage_count` and the nearest reachable vendor that sells any of them
