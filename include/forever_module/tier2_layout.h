@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 17;
+inline constexpr std::uint32_t kTier2LayoutVersion = 18;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -247,6 +247,11 @@ struct BotSnapshot {
     float taxi_master_y = 0.0f;
     float taxi_master_z = 0.0f;
     std::uint64_t taxi_master_guid = 0;
+    // Layout 18: professions. The two primary professions the core assigned to the bot (skill line ids, see BotProfessions.h: 0 when the bot has none, which is an
+    // alt, or Bot.Professions.Enabled is off) and its skill value and maximum in each (0 until it has learned the profession).
+    std::uint16_t profession_skill[2] = { 0, 0 };
+    std::uint16_t profession_value[2] = { 0, 0 };
+    std::uint16_t profession_max[2] = { 0, 0 };
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };

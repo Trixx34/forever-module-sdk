@@ -1,5 +1,10 @@
 # Changelog
 
+## Layout 18 / protocol 13 (professions)
+
+- `BotSnapshot` gains `profession_skill[2]`, `profession_value[2]` and `profession_max[2]`: the two primary professions the core assigned to the bot and its skill in each. Only combinations that
+  make sense are assigned (two gathering professions, or Mining + Engineering, Mining + Blacksmithing, Skinning + Leatherworking, Alchemy + Herbalism, Tailoring + Enchanting).
+
 ## Layout 17 / protocol 12 (flight points)
 
 - `BotSnapshot` gains `taxi_master_*` (the nearest flight master the bot can walk to: valid flag, x/y/z, unit reference) and `in_flight`.
