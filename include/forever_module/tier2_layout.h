@@ -287,6 +287,8 @@ enum class ActionType : std::uint32_t {
                  // Layout 16: 64 buy health potions, 128 buy mana potions, 256 buy bandages. Their target counts are the core's settings
                  // (Bot.Supplies.HealthPotionTarget, ManaPotionTarget, BandageTarget), not the action's. The core keeps back a money reserve
                  // (Bot.Supplies.ReserveCopperPerLevel per level) from every purchase except ammunition.
+                 // SDK 0.16: 1024 also sells white junk with the grey items of bit 1 (or alone): trade goods, spare bags and miscellaneous items. Never a
+                 // quest item, an equipped bag, a consumable, a reagent, ammunition, a weapon or armour. Meant for a bot whose bags are nearly full.
     kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
     kGroup = 8,  // party actions (M8). spell_id 1 invites the bot named by target_guid, 2 accepts the bot's pending invite,
                  // 3 leaves the bot's party. Refused in combat.
