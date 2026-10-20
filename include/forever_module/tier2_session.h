@@ -46,14 +46,20 @@ public:
     std::uint32_t MaxActions() const;
     std::uint32_t TickInterval() const;
 
+    // True once ReadLatestSnapshot() has copied a whole snapshot. PublishActions() needs one.
+    bool HasSnapshot() const { return _haveSnapshot; }
+
     // Non-blocking. Returns the most recently published snapshot. If the core publishes while it is copied, the copy
-    // is retried, so the result is always one complete snapshot (possibly the previous one).
+    // is retried. If all retries are torn, the previous snapshot is returned, so the result is always one complete
+    // snapshot (possibly an older one). Before the first whole copy the result is empty with tick_number 0.
     WorldTickSnapshotView const& ReadLatestSnapshot();
 
-    // Publishes actions for the snapshot most recently returned by ReadLatestSnapshot(); the snapshot's tick number
-    // is sent with them so the core can tell which snapshot they answer. Returns false, with the reason in error, and
-    // publishes nothing if there are more actions than MaxActions() or an action has an unknown type. The core checks
-    // each bot_guid against its own ownership, so an action for a bot this module does not control is dropped there.
+    // Publishes actions for the snapshot most recently read by ReadLatestSnapshot(); the snapshot's tick number is
+    // sent with them so the core can tell which snapshot they answer. Returns false, with the reason in error, and
+    // publishes nothing if no snapshot has been read yet, if there are more actions than MaxActions(), or if an
+    // action has an unknown type. The core checks each bot_guid against its own ownership, so an action for a bot
+    // this module does not control is dropped there. Each call replaces the whole action queue for that tick: the
+    // core reads one queue per tick, so pass every action for the tick in one call.
     bool PublishActions(std::vector<BotAction> const& actions, std::string& error);
 
 private:
@@ -62,6 +68,7 @@ private:
     struct Region;
     std::unique_ptr<Region> _region;
     WorldTickSnapshotView _lastSnapshot;
+    bool _haveSnapshot = false;
 };
 
 } // namespace forever_module

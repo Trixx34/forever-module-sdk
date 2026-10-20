@@ -212,6 +212,46 @@ int main()
         CHECK(!session->PublishActions({beyond}, actionError));
     }
 
+    // A session that has read no snapshot cannot publish: the actions would have no tick to answer. The first whole
+    // read then makes it publish-ready.
+    {
+        std::string freshError;
+        auto fresh = Tier2Session::Attach(name, freshError);
+        CHECK(fresh != nullptr);
+        if (fresh)
+        {
+            std::string publishError;
+            CHECK(!fresh->HasSnapshot());
+            CHECK(!fresh->PublishActions({}, publishError));
+            CHECK(publishError.find("no snapshot has been read yet") != std::string::npos);
+            CHECK(fresh->ReadLatestSnapshot().tick_number == 10);
+            CHECK(fresh->HasSnapshot());
+        }
+    }
+
+    // Corrupt indexes: a snapshot index past the two buffers is not followed, and an action index past them is refused.
+    {
+        auto* header = static_cast<Tier2RegionHeader*>(mapping->get_address());
+        header->published_snapshot_buffer.store(7);
+        std::string corruptError;
+        auto corrupt = Tier2Session::Attach(name, corruptError);
+        CHECK(corrupt != nullptr);
+        if (corrupt)
+        {
+            CHECK(corrupt->ReadLatestSnapshot().bots.empty());
+            CHECK(!corrupt->HasSnapshot());
+
+            header->published_snapshot_buffer.store(1);
+            CHECK(corrupt->ReadLatestSnapshot().tick_number == 10);
+
+            header->published_action_buffer.store(5);
+            std::string actionError;
+            CHECK(!corrupt->PublishActions({}, actionError));
+            CHECK(actionError.find("corrupt action buffer index") != std::string::npos);
+            header->published_action_buffer.store(0);
+        }
+    }
+
     // A region written with another layout version is refused, with the reason in the error.
     std::string const badName = name + "_v99";
     std::unique_ptr<bi::mapped_region> badMapping;

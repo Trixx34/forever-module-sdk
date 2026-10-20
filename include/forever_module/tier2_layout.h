@@ -334,7 +334,7 @@ enum class ActionType : std::uint32_t {
                          // bot must be within 8 yards of it (status kOutOfRange otherwise: walk closer). target_guid, when not 0, is an ITEM ENTRY to use on the object
                          // instead of a click (a key, a charge of powder): the bot is given one if it has none, and casts the item's spell at the object. Refused unless
                          // Bot.Actions.UseObject is on in the core (for scenarios and tests), in combat, dead, or with no such object in reach.
-    kSellToVendor = 26,  // layout 20: sell items of one entry from the bags to a vendor in interaction range. spell_id is the item entry; dest_x the count
+    kSellToVendor = 26,  // layout 20: sell items of one entry from the bags to a vendor in reach. spell_id is the item entry; dest_x the count
                          // to sell (0 = every one the bot carries of it). target_guid, when not 0, names the vendor NPC (BotSnapshot::vendor_guid is the
                          // one to use); 0 takes the nearest vendor in reach. Refused in combat, dead, with no vendor in reach, or when the bot has none
                          // of the entry. Items the vendor will not take are kept and reported as kRefused with a reason.

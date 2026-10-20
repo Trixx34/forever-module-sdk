@@ -3,12 +3,15 @@
 #include "forever_module/protocol_version.h"
 #include "forever_module/tier2_session.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cstring>
+#include <iostream>
 #include <mutex>
+#include <string>
 #include <thread>
 
 #if defined(__linux__)
@@ -37,14 +40,11 @@ namespace {
 bool StartSockets()
 {
 #ifdef _WIN32
-    static bool started = false;
-    static int result = 0;
-    if (!started)
-    {
+    // A function-local static is initialized once, thread-safely (C++11), so two threads cannot race into WSAStartup.
+    static int const result = [] {
         WSADATA data{};
-        result = WSAStartup(MAKEWORD(2, 2), &data);
-        started = true;
-    }
+        return WSAStartup(MAKEWORD(2, 2), &data);
+    }();
     return result == 0;
 #else
     return true;
@@ -93,6 +93,17 @@ public:
 private:
     timeval value_{};
 };
+
+// The quest operation sits in the top byte of BotAction::spell_id, so a quest id must fit in the low 24 bits.
+constexpr std::uint32_t kQuestIdLimit = 0x01000000u;
+
+// The error_code overload of set_option, so a failed option is reported to the caller rather than thrown.
+bool SetReceiveTimeout(local::stream_protocol::socket& socket, std::chrono::milliseconds timeout)
+{
+    boost::system::error_code ec;
+    socket.set_option(ReceiveTimeoutOption(timeout), ec);
+    return !ec;
+}
 
 } // namespace
 
@@ -185,7 +196,11 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     }
 
     // Bound the blocking reads below by the handshake timeout via the socket's receive timeout.
-    transport_->socket.set_option(ReceiveTimeoutOption(timeout));
+    if (!SetReceiveTimeout(transport_->socket, timeout))
+    {
+        rejectionReason_ = "cannot set the handshake timeout on the socket";
+        return false;
+    }
 
     HandshakeRequest request;
     request.set_module_name(manifest_.module_name);
@@ -202,8 +217,9 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 
     Envelope out;
     *out.mutable_handshake_request() = request;
+    // A failed clear leaves the handshake timeout in place, which only bounds the reads that follow.
     auto clearTimeout = [this] {
-        transport_->socket.set_option(ReceiveTimeoutOption(std::chrono::hours(1)));
+        SetReceiveTimeout(transport_->socket, std::chrono::hours(1));
     };
 
     if (!WriteEnvelope(out))
@@ -236,6 +252,18 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
     bounds_.max_actions = response.negotiated_max_actions();
     bounds_.tick_interval = response.negotiated_tick_interval();
 
+    // The core grants at most what was asked (ModuleMgr: min(requested, config)). A grant above the request, or a
+    // region with no bots or no actions, means the core and this SDK disagree; refuse rather than run on bad bounds.
+    if (!tier2RegionName_.empty() &&
+        (bounds_.max_bots == 0 || bounds_.max_actions == 0 || bounds_.max_bots > manifest_.requested_max_bots ||
+         bounds_.max_nearby_units > manifest_.requested_max_nearby_units ||
+         bounds_.max_actions > manifest_.requested_max_actions))
+    {
+        rejectionReason_ = "core granted Tier 2 bounds outside the requested limits";
+        clearTimeout();
+        return false;
+    }
+
     // Core sends the config immediately after accepting (doc 03 §Config delivery).
     if (!ReadEnvelope(in) || in.payload_case() != Envelope::kModuleConfig)
     {
@@ -251,7 +279,11 @@ bool ModuleClient::Handshake(std::chrono::milliseconds timeout)
 
     // Clear the handshake receive timeout so Run() can block indefinitely on the socket. A zero
     // timeout can mean "poll immediately" on some platforms, so use a long duration instead.
-    transport_->socket.set_option(ReceiveTimeoutOption(std::chrono::hours(1)));
+    if (!SetReceiveTimeout(transport_->socket, std::chrono::hours(1)))
+    {
+        rejectionReason_ = "cannot clear the handshake timeout on the socket";
+        return false;
+    }
     rejectionReason_.clear();
     return true;
 }
@@ -304,7 +336,10 @@ std::uint64_t ModuleClient::RequestAction(ActionRequest request, ActionCallback 
     out.set_message_id(id);
     *out.mutable_action_request() = request;
     if (!WriteEnvelope(out))
-        actionCallbacks_.erase(id); // connection is gone; Run() will report it
+    {
+        actionCallbacks_.erase(id); // connection is gone; Run() reports the loss
+        std::cerr << "forever_module: action " << id << " was not sent; its reply will not arrive\n";
+    }
     return id;
 }
 
@@ -416,13 +451,31 @@ std::uint64_t ModuleClient::AuctionHouseForBot(std::uint64_t botGuid, AuctionHou
     return RequestAction(std::move(request), std::move(onReply));
 }
 
-// Publishes a single bot action through Tier 2. Returns false if the module has no Tier 2 session.
+// Queues a single bot action for this pass. Attaches Tier 2 on first use, so the convenience methods work without a
+// separate AttachTier2() call. FlushBotActions() sends the queue once the callbacks for the pass have run.
 bool ModuleClient::PublishBotAction(BotAction const& action)
 {
-    if (!tier2_)
+    if (!tier2_ && !AttachTier2())
         return false;
+    if (pendingActions_.size() >= bounds_.max_actions)
+    {
+        tier2Error_ = "more bot actions queued than the core granted (" + std::to_string(bounds_.max_actions) + ")";
+        return false;
+    }
+    pendingActions_.push_back(action);
+    return true;
+}
+
+// Sends the queued actions in one publish. Waits while no snapshot has been read, since the actions answer one.
+// A publish that fails is dropped and logged, because the bounds were checked when each action was queued.
+void ModuleClient::FlushBotActions()
+{
+    if (pendingActions_.empty() || !tier2_ || !tier2_->HasSnapshot())
+        return;
     std::string error;
-    return tier2_->PublishActions({action}, error);
+    if (!tier2_->PublishActions(pendingActions_, error))
+        std::cerr << "forever_module: dropped " << pendingActions_.size() << " bot actions: " << error << "\n";
+    pendingActions_.clear();
 }
 
 std::uint64_t ModuleClient::SendPlayerMessage(std::uint64_t playerGuid, std::string const& text, ActionCallback onReply)
@@ -607,6 +660,11 @@ void ModuleClient::GroupLeave(std::uint64_t botGuid, ActionCallback onReply)
 void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;
+    if (questId >= kQuestIdLimit)
+    {
+        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+        return;
+    }
     BotAction action;
     action.bot_guid = botGuid;
     action.type = ActionType::kQuest;
@@ -617,6 +675,11 @@ void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, Act
 void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;
+    if (questId >= kQuestIdLimit)
+    {
+        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+        return;
+    }
     BotAction action;
     action.bot_guid = botGuid;
     action.type = ActionType::kQuest;
@@ -627,6 +690,11 @@ void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, Act
 void ModuleClient::QuestAbandon(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;
+    if (questId >= kQuestIdLimit)
+    {
+        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+        return;
+    }
     BotAction action;
     action.bot_guid = botGuid;
     action.type = ActionType::kQuest;
@@ -783,7 +851,10 @@ std::uint64_t ModuleClient::RequestControl(std::uint64_t botGuid, SpawnParams co
     if (onReply)
         controlCallbacks_[id] = std::move(onReply);
     if (!WriteEnvelope(out))
-        controlCallbacks_.erase(id); // connection is gone; Run() will report it
+    {
+        controlCallbacks_.erase(id); // connection is gone; Run() reports the loss
+        std::cerr << "forever_module: control request " << id << " was not sent; its reply will not arrive\n";
+    }
     return id;
 }
 
@@ -797,7 +868,11 @@ void ModuleClient::ReleaseControl(std::uint64_t botGuid)
 Tier2Session* ModuleClient::AttachTier2()
 {
     if (tier2RegionName_.empty())
-        return nullptr; // not granted, or the module did not ask for Tier 2
+    {
+        // Not granted, or the module did not ask for Tier 2. Recorded so a caller can see why it got nothing.
+        tier2Error_ = "no Tier 2 region was granted at handshake";
+        return nullptr;
+    }
     if (!tier2_)
     {
         tier2Error_.clear();
@@ -832,7 +907,10 @@ bool WaitReadable(local::stream_protocol::socket& socket, std::chrono::milliseco
 
 void ModuleClient::AddTimer(std::chrono::milliseconds period, TimerCallback callback)
 {
-    timers_.push_back(Timer{ period, std::chrono::steady_clock::time_point{}, std::move(callback) });
+    // A zero period would make Run() spin without waiting, so it is raised to the smallest period that still waits.
+    // Next starts one period from now; Run() sets it again from its own start for timers added before Run().
+    period = std::max(period, std::chrono::milliseconds(1));
+    timers_.push_back(Timer{ period, std::chrono::steady_clock::now() + period, std::move(callback) });
 }
 
 // The time until the earliest timer, or a long wait when there are none.
@@ -850,12 +928,15 @@ std::chrono::milliseconds ModuleClient::UntilNextTimer(std::chrono::steady_clock
 
 void ModuleClient::FireDueTimers(std::chrono::steady_clock::time_point now)
 {
-    for (Timer& timer : timers_)
+    // Indexed, not range-for: a callback may call AddTimer(), which can reallocate timers_ and invalidate a reference.
+    for (std::size_t i = 0; i < timers_.size(); ++i)
     {
-        if (now < timer.Next)
+        if (now < timers_[i].Next)
             continue;
-        timer.Next = now + timer.Period;
-        timer.Callback();
+        timers_[i].Next = now + timers_[i].Period;
+        // Copied, so a callback that replaces its own timer's callback does not destroy the function while it runs.
+        TimerCallback callback = timers_[i].Callback;
+        callback();
     }
 }
 
@@ -865,6 +946,13 @@ void ModuleClient::Run()
         return;
 
     StartHeartbeat();
+
+    // Stops the heartbeat on every way out of Run(), including an exception from a callback.
+    struct HeartbeatGuard
+    {
+        ModuleClient* client;
+        ~HeartbeatGuard() { client->StopHeartbeat(); }
+    } heartbeatGuard{ this };
 
     auto const start = std::chrono::steady_clock::now();
     for (Timer& timer : timers_)
@@ -878,15 +966,24 @@ void ModuleClient::Run()
         if (!timers_.empty() && !WaitReadable(transport_->socket, UntilNextTimer(now)))
         {
             FireDueTimers(std::chrono::steady_clock::now());
+            FlushBotActions();
             continue;
         }
 
-        if (!ReadEnvelope(envelope) || !Dispatch(envelope))
+        if (!ReadEnvelope(envelope))
+        {
+            if (!stopping_)
+                std::cerr << "forever_module: lost the connection to core\n";
             break;
+        }
+        bool const keepRunning = Dispatch(envelope);
         FireDueTimers(std::chrono::steady_clock::now());
+        FlushBotActions();
+        if (!keepRunning)
+            break;
     }
 
-    StopHeartbeat();
+    FlushBotActions();
 }
 
 void ModuleClient::Shutdown()
@@ -912,21 +1009,37 @@ bool ModuleClient::ReadEnvelope(Envelope& envelope)
 
     std::uint32_t const length = DecodeLength(header);
     if (length == 0 || length > kMaxFrameBytes)
+    {
+        std::cerr << "forever_module: core sent a frame of " << length << " bytes; the connection is dropped\n";
         return false;
+    }
 
     std::string body(length, '\0');
     ba::read(transport_->socket, ba::buffer(body), ec);
     if (ec)
         return false;
 
-    return envelope.ParseFromString(body);
+    if (!envelope.ParseFromString(body))
+    {
+        std::cerr << "forever_module: core sent a frame that does not parse; the connection is dropped\n";
+        return false;
+    }
+    return true;
 }
 
 bool ModuleClient::WriteEnvelope(Envelope const& envelope)
 {
     std::string body;
-    if (!envelope.SerializeToString(&body) || body.size() > kMaxFrameBytes)
+    if (!envelope.SerializeToString(&body))
+    {
+        std::cerr << "forever_module: an envelope does not serialize; it was not sent\n";
         return false;
+    }
+    if (body.size() > kMaxFrameBytes)
+    {
+        std::cerr << "forever_module: an envelope of " << body.size() << " bytes is over the frame limit; it was not sent\n";
+        return false;
+    }
 
     std::array<std::uint8_t, 4> header{};
     EncodeLength(static_cast<std::uint32_t>(body.size()), header);
@@ -993,14 +1106,16 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
 {
     switch (envelope.payload_case())
     {
+        // Every callback is copied before it runs, so a callback that registers a replacement (OnNotify, OnConfig, ...)
+        // does not destroy the function object it is executing in.
         case Envelope::kModuleConfig:
         {
             config_.clear();
             for (ConfigEntry const& entry : envelope.module_config().values())
                 config_[entry.key()] = entry.value();
             haveConfig_ = true;
-            if (configCallback_)
-                configCallback_(config_);
+            if (auto const callback = configCallback_)
+                callback(config_);
             return true;
         }
 
@@ -1009,7 +1124,10 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
             EventNotify const& notify = envelope.event_notify();
             auto it = notifyCallbacks_.find(notify.hook_name());
             if (it != notifyCallbacks_.end() && it->second)
-                it->second(notify);
+            {
+                auto const callback = it->second;
+                callback(notify);
+            }
             return true;
         }
 
@@ -1019,7 +1137,10 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
             EventReply reply;
             auto it = requestCallbacks_.find(request.hook_name());
             if (it != requestCallbacks_.end() && it->second)
-                reply = it->second(request);
+            {
+                auto const callback = it->second;
+                reply = callback(request);
+            }
 
             // Always answer, even with an empty reply, so core doesn't wait out its timeout.
             reply.set_message_id(request.message_id());
@@ -1059,8 +1180,8 @@ bool ModuleClient::Dispatch(Envelope const& envelope)
 
         case Envelope::kControlRevoked:
         {
-            if (revokedCallback_)
-                revokedCallback_(envelope.control_revoked().bot_guid(), envelope.control_revoked().reason());
+            if (auto const callback = revokedCallback_)
+                callback(envelope.control_revoked().bot_guid(), envelope.control_revoked().reason());
             return true;
         }
 

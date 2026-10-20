@@ -179,9 +179,12 @@ public:
                            std::uint64_t copper = 0, ActionCallback onReply = nullptr);
 
     // --- Tier 2 bot-action convenience methods ---
-    // Each builds a BotAction and publishes it via AttachTier2()->PublishActions(). The reply arrives
-    // asynchronously through onReply (if non-null), and the result is also reflected in the bot's
-    // BotSnapshot::last_action_* fields on the next Tier 2 tick.
+    // Each builds a BotAction and queues it for this tick. The queue is attached to the tick's actions after the
+    // callbacks for the pass have run, in one PublishActions() call, so actions from several calls in one pass are
+    // all sent. The queue is attached to the snapshot most recently read; if no snapshot has been read yet, the
+    // queued action is kept until one is. The reply arrives asynchronously through onReply (if non-null), and the
+    // result is also reflected in the bot's BotSnapshot::last_action_* fields on the next Tier 2 tick. Tier 2 is
+    // attached on first use; if that fails, the method does nothing and tier2_error() says why.
 
     void CastSpell(std::uint64_t botGuid, std::uint32_t spellId, std::uint64_t targetGuid = 0,
                    ActionCallback onReply = nullptr);
@@ -240,9 +243,10 @@ public:
     Tier2Session* AttachTier2();
     std::string const& tier2_error() const;
 
-    // Calls `callback` on the thread that runs Run(), every `period`, starting `period` after Run() begins. Add timers
-    // before Run(). A timer is how a module acts on its own schedule (for example, a bot ramp): the callback may send
-    // requests, which is only safe on the Run() thread. A timer that is due while the callback runs fires again after it.
+    // Calls `callback` on the thread that runs Run(), every `period`, starting `period` after Run() begins (or after
+    // AddTimer() for a timer added while Run() is going). A period below 1 ms is raised to 1 ms. A timer is how a
+    // module acts on its own schedule (for example, a bot ramp): the callback may send requests, which is only safe on
+    // the Run() thread. A timer that is due while the callback runs fires again after it.
     using TimerCallback = std::function<void()>;
     void AddTimer(std::chrono::milliseconds period, TimerCallback callback);
 
@@ -271,8 +275,10 @@ private:
     void StopHeartbeat();
     bool Dispatch(Envelope const& envelope); // false means stop the Run() loop
 
-    // Publishes a single BotAction through Tier 2. Returns false if the module has no Tier 2 session.
+    // Queues a single BotAction for the next Tier 2 publish. Returns false if Tier 2 is not attached or the queue is full.
     bool PublishBotAction(BotAction const& action);
+    // Sends the queued actions in one PublishActions() call and clears the queue. Keeps them if no snapshot is read yet.
+    void FlushBotActions();
 
     ModuleManifest manifest_;
     std::unique_ptr<Transport> transport_;
@@ -281,6 +287,7 @@ private:
     std::string tier2RegionName_;
     std::unique_ptr<Tier2Session> tier2_;
     std::string tier2Error_;
+    std::vector<BotAction> pendingActions_;
     NegotiatedBounds bounds_;
     std::string rejectionReason_;
 

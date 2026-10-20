@@ -13,6 +13,15 @@ namespace bi = boost::interprocess;
 
 namespace forever_module {
 
+// The shared structs are the wire format the core writes. These are their sizes at layout 20 (LP64). A field added without a layout bump
+// changes a size and fails here, rather than reading the wrong bytes at run time. Update them in the same commit as the layout version.
+static_assert(sizeof(BotSnapshot) == 840, "BotSnapshot changed size: bump kTier2LayoutVersion and update this check");
+static_assert(sizeof(NearbyUnit) == 48, "NearbyUnit changed size: bump kTier2LayoutVersion and update this check");
+static_assert(sizeof(Tier2RegionHeader) == 56, "Tier2RegionHeader changed size: bump kTier2LayoutVersion and update this check");
+static_assert(sizeof(WorldTickSnapshotHeader) == 16, "WorldTickSnapshotHeader changed size: bump kTier2LayoutVersion and update this check");
+static_assert(sizeof(ActionQueueHeader) == 16, "ActionQueueHeader changed size: bump kTier2LayoutVersion and update this check");
+static_assert(sizeof(BotAction) == 40, "BotAction changed size: bump kTier2LayoutVersion and update this check");
+
 struct Tier2Session::Region
 {
     Region(bi::shared_memory_object&& shm, bi::mapped_region&& map)
@@ -65,8 +74,9 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
         session->_region->header = header;
         return session;
     }
-    catch (bi::interprocess_exception const& e)
+    catch (std::exception const& e)
     {
+        // interprocess_exception, and std::bad_alloc from the copies below: a region that cannot be used is reported, not thrown.
         error = "cannot open Tier 2 region '" + regionName + "': " + e.what();
         return nullptr;
     }
@@ -99,26 +109,38 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
     std::uint32_t const maxBots = header.max_bots;
     std::uint32_t const maxNearby = header.max_nearby_units;
 
-    // Copy the published buffer. If the core flipped the index during the copy, the buffer it was writing may
-    // have been overwritten, so copy again. Three attempts; after that keep the last copy.
+    // The core writes a snapshot's tick, then its buffer index. A copy is whole when the index and the published tick
+    // are the same before and after it: a publish during the copy changes the tick, so two publishes that bring the
+    // index back to the same value are still caught. Three attempts. If none is whole, the previous snapshot is kept
+    // rather than a mix of two.
     for (int attempt = 0; attempt < 3; ++attempt)
     {
         std::uint8_t const buffer = header.published_snapshot_buffer.load(std::memory_order_acquire);
+        if (buffer > 1)
+            break; // a corrupt index would point outside the region
+        std::uint64_t const tick = header.published_snapshot_tick.load(std::memory_order_acquire);
+
         auto const* snapshot = reinterpret_cast<WorldTickSnapshotHeader const*>(
             region.Base() + Tier2SnapshotBufferOffset(maxBots, maxNearby, buffer));
 
-        _lastSnapshot.tick_number = snapshot->tick_number;
+        WorldTickSnapshotView fresh;
+        fresh.tick_number = snapshot->tick_number;
         std::uint32_t const count = std::min(snapshot->bot_count, maxBots);
         auto const* bots = reinterpret_cast<BotSnapshot const*>(snapshot + 1);
-        _lastSnapshot.bots.assign(bots, bots + count);
+        fresh.bots.assign(bots, bots + count);
 
         // Nearby units follow the bot array, maxNearby slots for every bot slot the core allotted.
         auto const* nearby = reinterpret_cast<NearbyUnit const*>(bots + maxBots);
-        _lastSnapshot.max_nearby_units = maxNearby;
-        _lastSnapshot.nearby.assign(nearby, nearby + std::size_t(count) * maxNearby);
+        fresh.max_nearby_units = maxNearby;
+        fresh.nearby.assign(nearby, nearby + std::size_t(count) * maxNearby);
 
-        if (header.published_snapshot_buffer.load(std::memory_order_acquire) == buffer)
+        if (header.published_snapshot_buffer.load(std::memory_order_acquire) == buffer &&
+            header.published_snapshot_tick.load(std::memory_order_acquire) == tick)
+        {
+            _lastSnapshot = std::move(fresh);
+            _haveSnapshot = true;
             break;
+        }
     }
     return _lastSnapshot;
 }
@@ -135,6 +157,12 @@ bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::st
 {
     Tier2RegionHeader& header = _region->Header();
 
+    // The actions answer a snapshot, and their tick is that snapshot's tick: without one read, the core could not match them.
+    if (!_haveSnapshot)
+    {
+        error = "no snapshot has been read yet: call ReadLatestSnapshot() before PublishActions()";
+        return false;
+    }
     if (actions.size() > header.max_actions)
     {
         error = "too many actions: " + std::to_string(actions.size()) + ", the core granted " +
@@ -153,6 +181,11 @@ bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::st
     // This module is the only writer, so the published index changes only here. Write the buffer the core is not
     // reading, then publish the tick before the index: a core that sees the new index also sees the new tick.
     std::uint8_t const published = header.published_action_buffer.load(std::memory_order_acquire);
+    if (published > 1)
+    {
+        error = "corrupt action buffer index " + std::to_string(published);
+        return false;
+    }
     std::uint8_t const target = published ^ 1;
     std::byte* base = _region->MutableBase() + Tier2ActionBufferOffset(header.max_bots, header.max_nearby_units,
                                                                         header.max_actions, target);
