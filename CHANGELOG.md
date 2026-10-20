@@ -2,8 +2,9 @@
 
 ## SDK package 0.16.0 (2026-10-20)
 
-- `ActionType::kVendor` gets bit 1024: sell white junk (trade goods, spare bags, miscellaneous items) with the grey items of bit 1, or alone. Never a quest
-  item, an equipped bag, a consumable, a reagent, ammunition, a weapon or armour. For a bot whose bags are nearly full. A new capability, so a MINOR bump;
+- `ActionType::kVendor` gets bit 1024: sell white junk with the grey items of bit 1, or alone: spare bags, miscellaneous items and the surplus of trade goods (a bot keeps
+  60 pieces of each kind for First Aid, Cooking or the auction house). Never a quest item, an equipped bag, a consumable, a reagent, ammunition, a weapon or armour. For a
+  bot whose bags are nearly full. A new capability, so a MINOR bump;
   no layout or wire change: `protocol_version` stays `"15"`, `kTier2LayoutVersion` stays `20`.
 
 ## SDK package 0.15.0 (2026-10-20)
