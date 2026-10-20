@@ -117,6 +117,7 @@ void RunAcceptingCore(stream_protocol::acceptor& acceptor, bool sendShutdownEnve
         EXPECT_IN(fails, req.module_name() == "test-module");
         EXPECT_IN(fails, req.protocol_version() == kProtocolVersion);
         EXPECT_IN(fails, req.sdk_package_version() == kSdkPackageVersion);
+        EXPECT_IN(fails, std::string(kSdkPackageVersion) == FOREVER_SDK_CMAKE_VERSION); // CMakeLists.txt and protocol_version.h agree
         EXPECT_IN(fails, req.tier1_hooks_size() == 2);
         EXPECT_IN(fails, req.requested_max_bots() == 0);
     }

@@ -10,6 +10,8 @@ inline constexpr char const* kProtocolVersion = "15";
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire
 // contract. See doc/module-system/11-sdk-scope.md for the full versioning split rationale.
-inline constexpr char const* kSdkPackageVersion = "0.1.0";
+// Pre-1.0 scheme (forever-ops docs/96-versioning.md): 0.MINOR.PATCH, MINOR for a protocol or layout change or a new capability, PATCH for fixes. The
+// same number is in CMakeLists.txt (project VERSION); the tier1_roundtrip test fails when the two differ.
+inline constexpr char const* kSdkPackageVersion = "0.15.0";
 
 } // namespace forever_module

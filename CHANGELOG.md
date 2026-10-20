@@ -1,5 +1,11 @@
 # Changelog
 
+## SDK package 0.15.0 (2026-10-20)
+
+- The package version was still the first release number, `0.1.0`, while the SDK had gone through 15 protocol revisions (layout 20). Each of those was a breaking
+  change, which is a MINOR bump while the SDK is pre-1.0, so the version is now `0.15.0` (`kSdkPackageVersion` and the project VERSION; the round trip test checks they
+  agree). The scheme is in the forever-ops docs, `96-versioning.md`. No wire or layout change: `protocol_version` stays `"15"`, `kTier2LayoutVersion` stays `20`.
+
 ## Layout 20 / protocol 15 (auction house and vendor sales)
 
 - `BotSnapshot` gains `auctioneer_valid`, `auctioneer_x`, `auctioneer_y` and `auctioneer_z`: the nearest auctioneer the bot's faction may use, on the bot's map, so the module can walk to the house. `auctioneer_guid` (layout 13) is the unit reference an AuctionHouse action names.

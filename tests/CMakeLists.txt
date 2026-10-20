@@ -3,6 +3,8 @@ find_package(Boost REQUIRED)  # Boost.System is header-only since 1.69; no separ
 # The test drives a fake core with Boost.Asio local sockets; the library itself does not use Boost.
 add_executable(tier1_roundtrip_test tier1_roundtrip_test.cpp)
 target_link_libraries(tier1_roundtrip_test PRIVATE forever_module_sdk Boost::headers)
+# the version in CMakeLists.txt and kSdkPackageVersion are one number; the test compares them
+target_compile_definitions(tier1_roundtrip_test PRIVATE FOREVER_SDK_CMAKE_VERSION="${PROJECT_VERSION}")
 add_test(NAME tier1_roundtrip COMMAND tier1_roundtrip_test)
 
 add_executable(tier2_attach_test tier2_attach_test.cpp)
