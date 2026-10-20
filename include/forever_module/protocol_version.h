@@ -12,6 +12,6 @@ inline constexpr char const* kProtocolVersion = "15";
 // contract. See doc/module-system/11-sdk-scope.md for the full versioning split rationale.
 // Pre-1.0 scheme (forever-ops docs/96-versioning.md): 0.MINOR.PATCH, MINOR for a protocol or layout change or a new capability, PATCH for fixes. The
 // same number is in CMakeLists.txt (project VERSION); the tier1_roundtrip test fails when the two differ.
-inline constexpr char const* kSdkPackageVersion = "0.16.0";
+inline constexpr char const* kSdkPackageVersion = "0.17.0";
 
 } // namespace forever_module

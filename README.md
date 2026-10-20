@@ -38,7 +38,7 @@ Two independent axes (see `doc/module-system/11-sdk-scope.md` in the core repo):
 - **Tier 2 layout version** (`kTier2LayoutVersion` in `tier2_layout.h`) is the shared-memory layout. A module built
   against another layout is refused at region attach. Each layout bump is listed in `CHANGELOG.md`; adding an action type or a Tier 1
   action does not bump it. `tier2_session.cpp` pins the sizes of the shared structs, so a field added without a bump fails to compile.
-- **SDK package version** (`kSdkPackageVersion` and the project VERSION in `CMakeLists.txt`, currently `"0.16.0"`) is this repo's own release version.
+- **SDK package version** (`kSdkPackageVersion` and the project VERSION in `CMakeLists.txt`, currently `"0.17.0"`) is this repo's own release version.
   Pre-1.0: `0.MINOR.PATCH`; MINOR for a protocol or layout change or a new capability, PATCH for fixes. Bump it in the same commit as the change.
 
 The core and the SDK must agree on the protocol and the layout. The core keeps a byte-identical copy of `tier2_layout.h`

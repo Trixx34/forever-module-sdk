@@ -341,7 +341,13 @@ enum class ActionType : std::uint32_t {
                          // to sell (0 = every one the bot carries of it). target_guid, when not 0, names the vendor NPC (BotSnapshot::vendor_guid is the
                          // one to use); 0 takes the nearest vendor in reach. Refused in combat, dead, with no vendor in reach, or when the bot has none
                          // of the entry. Items the vendor will not take are kept and reported as kRefused with a reason.
-    kLastActionType = kSellToVendor, // the highest valid value; PublishActions refuses anything above it
+    kCraft = 27,         // SDK 0.17: make something that raises a secondary skill. spell_id is the skill line, 129 First Aid (bandages from cloth) or 185 Cooking
+                         // (food from meat). The core picks, among the recipes the bot knows for that skill, the one that can still raise its skill, that it has the
+                         // materials for and that needs the most skill, and casts it on the bot. A recipe that needs a cooking fire when none is near makes the
+                         // bot light a campfire first (Basic Campfire); the next kCraft makes the food. kApplied when a cast started; kRefused with a reason when
+                         // the bot has no recipe, no materials, or its skill is too high for any recipe it can make; kBusy while another cast runs; kMoving when the
+                         // recipe has a cast time and the bot moves. Refused in combat and dead.
+    kLastActionType = kCraft, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
