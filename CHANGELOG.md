@@ -1,5 +1,16 @@
 # Changelog
 
+## SDK package 0.18.0 (2026-10-21)
+
+- `BotActionStatus::kNeedsFocus` (14): a craft or a cast needs a spell focus object (anvil, forge, cooking fire) within reach and there is none; the module walks to one and
+  tries again. Distinct from `kRefused`, which no walk cures.
+- `ActionType::kCraft` (20) is implemented: craft one named recipe (`spell_id` = the recipe's spell id).
+- `ActionType::kGather` (21) is implemented: `spell_id` is a gathering skill line (186 Mining, 182 Herbalism, 393 Skinning); the core finds a node or a skinnable corpse within
+  30 yards, walks the bot to it and casts the gathering spell.
+- `ActionType::kSkillUp` (27) accepts 164 Blacksmithing, 165 Leatherworking, 171 Alchemy, 186 Smelting, 197 Tailoring and 202 Engineering besides 129 and 185, and no longer
+  picks a recipe whose focus is not near while another is possible. New capabilities, so a MINOR bump; no layout change: `protocol_version` stays `"15"`,
+  `kTier2LayoutVersion` stays `20`. `kLastActionType` stays `kSkillUp`.
+
 ## SDK package 0.17.0 (2026-10-20)
 
 - `ActionType::kSkillUp` (27): make something that raises a secondary skill. `spell_id` is the skill line, 129 First Aid (bandages from cloth) or 185 Cooking (food
