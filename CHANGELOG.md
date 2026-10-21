@@ -1,5 +1,13 @@
 # Changelog
 
+## SDK package 0.19.0 (2026-10-21)
+
+- Layout 21, protocol 16: `GroundEffect` (spell id, position, radius, kind, hostile flag) and `BotSnapshot::ground_effect_count` / `ground_effects[kMaxGroundEffects = 4]`, the harmful-looking
+  things on the ground within 30 yards of a bot: a dynamic object (a spell's persistent area: Flamestrike, Blizzard, a poison cloud) or an area trigger. The one the bot stands in or
+  nearest to comes first. The core fills them only when `Bot.Snapshot.GroundEffects` is on. `sizeof(BotSnapshot)` is now 936 (it was 840), `sizeof(GroundEffect)` 24. A breaking
+  change (the shared structs grew), so `kTier2LayoutVersion` 21 and `protocol_version` `"16"`; every module must be rebuilt (module.json `protocol_version` `"16"`).
+  `kLastActionType` stays `kSkillUp`.
+
 ## SDK package 0.18.0 (2026-10-21)
 
 - `BotActionStatus::kNeedsFocus` (14): a craft or a cast needs a spell focus object (anvil, forge, cooking fire) within reach and there is none; the module walks to one and

@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 20;
+inline constexpr std::uint32_t kTier2LayoutVersion = 21;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -67,6 +67,23 @@ enum class BotActionStatus : std::uint8_t {
                          // and stops there (the move is still applied). Only sent for kMoveTo.
     kNeedsFocus = 14,    // SDK 0.18: a craft (kSkillUp, kCraft) or a cast needs a spell focus object (an anvil, a forge, a cooking fire) within reach and
                          // there is none: walk to one and try again. Distinct from kRefused (no recipe, no materials), which no walk will cure.
+};
+
+// Layout 21: one harmful-looking thing on the ground near a bot: a dynamic object (a spell's persistent area, such as Flamestrike or Blizzard) or an area trigger. The
+// core lists the ones within kGroundEffectRangeYards of the bot, the one the bot stands in or nearest to first, up to kMaxGroundEffects. radius is the effect's radius in
+// yards (0: not known). kind: 1 dynamic object, 2 area trigger. hostile is 1 when the effect's caster is hostile to the bot (a creature's spell, not a party member's).
+// spell_id 0 marks an unused slot. Only filled when Bot.Snapshot.GroundEffects is on in the core.
+inline constexpr std::size_t kMaxGroundEffects = 4;
+inline constexpr float kGroundEffectRangeYards = 30.0f;
+struct GroundEffect {
+    std::uint32_t spell_id = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float radius = 0.0f;
+    std::uint8_t kind = 0;
+    std::uint8_t hostile = 0;
+    std::uint16_t reserved = 0;
 };
 
 // One active spell cooldown of a bot. spell_id 0 marks an unused slot.
@@ -260,6 +277,10 @@ struct BotSnapshot {
     float auctioneer_x = 0.0f;
     float auctioneer_y = 0.0f;
     float auctioneer_z = 0.0f;
+    // Layout 21: the ground effects near the bot (see GroundEffect), the first ground_effect_count entries of ground_effects[]. 0 when none, or when the core's
+    // Bot.Snapshot.GroundEffects is off.
+    std::uint8_t ground_effect_count = 0;
+    GroundEffect ground_effects[kMaxGroundEffects] = {};
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -431,6 +452,8 @@ static_assert(std::atomic<std::uint8_t>::is_always_lock_free, "published_*_buffe
 
 static_assert(std::is_standard_layout_v<NearbyUnit> && std::is_trivially_copyable_v<NearbyUnit>,
               "NearbyUnit must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<GroundEffect> && std::is_trivially_copyable_v<GroundEffect>,
+              "GroundEffect must be POD for shared-memory use");
 static_assert(std::is_standard_layout_v<AuraEntry> && std::is_trivially_copyable_v<AuraEntry>,
               "AuraEntry must be POD for shared-memory use");
 static_assert(std::is_standard_layout_v<BotSnapshot> && std::is_trivially_copyable_v<BotSnapshot>,
