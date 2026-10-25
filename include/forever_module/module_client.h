@@ -178,6 +178,16 @@ public:
     std::uint64_t BotTrade(std::uint64_t botGuid, BotTradeOp op, std::uint32_t slot = 0, std::uint64_t itemGuid = 0,
                            std::uint64_t copper = 0, ActionCallback onReply = nullptr);
 
+    // The role a bot plays, for its talent profile: kNone, kTank, kHealer or kDps. The core spends the bot's talent points by the profile for
+    // its (class, role) as far as its level allows; the reply says false with a reason when it could not (in combat, below level 10).
+    enum class TalentRole : std::uint32_t {
+        kNone = 0,
+        kTank = 1,
+        kHealer = 2,
+        kDps = 3,
+    };
+    std::uint64_t SpendBotTalents(std::uint64_t botGuid, TalentRole role, ActionCallback onReply = nullptr);
+
     // --- Tier 2 bot-action convenience methods ---
     // Each builds a BotAction and queues it for this tick. The queue is attached to the tick's actions after the
     // callbacks for the pass have run, in one PublishActions() call, so actions from several calls in one pass are

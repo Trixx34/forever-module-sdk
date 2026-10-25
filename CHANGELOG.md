@@ -1,5 +1,14 @@
 # Changelog
 
+## SDK package 0.20.0 (2026-10-25): protocol 17 (bot talent profiles)
+
+- `ActionRequest` gains `spend_bot_talents` (22, `SpendBotTalentsAction`: `bot_guid`, and `role`: 0 none, 1 tank, 2 healer, 3 dps). The core
+  spends the bot's talent points by its profile for (class, role), out of combat, as its level allows; a reply of false gives the reason
+  (in combat, below level 10), and the module asks again later. Points already spent are not taken back (no respec yet).
+- `ModuleClient::SpendBotTalents(bot, TalentRole, onReply)` and the `TalentRole` enum (`kNone`, `kTank`, `kHealer`, `kDps`).
+- Protocol `"17"` (was `"16"`): a breaking change to the Tier 1 message schema, so every module must be rebuilt (module.json `protocol_version` `"17"`).
+  The Tier 2 layout is unchanged (`kTier2LayoutVersion` stays 21).
+
 ## SDK package 0.19.0 (2026-10-21)
 
 - Layout 21, protocol 16: `GroundEffect` (spell id, position, radius, kind, hostile flag) and `BotSnapshot::ground_effect_count` / `ground_effects[kMaxGroundEffects = 4]`, the harmful-looking
