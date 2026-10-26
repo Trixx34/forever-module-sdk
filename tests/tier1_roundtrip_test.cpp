@@ -1093,6 +1093,123 @@ Failures RunBotTradeScenario()
     return all;
 }
 
+// SpendBotTalents (protocol 18): the old call sends no spec, the new one sends role and spec, kNone leaves the field out.
+Failures RunTalentsScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("talents");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(14);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+        auto reply = [&](std::uint64_t id, bool success)
+        {
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* r = out.mutable_action_reply();
+            r->set_message_id(id);
+            r->set_success(success);
+            if (!success)
+                r->set_reason("in combat");
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        };
+
+        // 1: the protocol 17 call (role only): no spec on the wire.
+        bool got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_spend_bot_talents());
+            SpendBotTalentsAction const& talents = in.action_request().spend_bot_talents();
+            EXPECT_IN(coreFails, talents.bot_guid() == 42 && talents.role() == 3 && !talents.has_spec());
+            reply(in.action_request().message_id(), true);
+        }
+        // 2: role and spec (hunter Beast Mastery = 7).
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_spend_bot_talents());
+            SpendBotTalentsAction const& talents = in.action_request().spend_bot_talents();
+            EXPECT_IN(coreFails, talents.bot_guid() == 43 && talents.role() == 3 && talents.has_spec() && talents.spec() == 7);
+            reply(in.action_request().message_id(), true);
+        }
+        // 3: healer role with the druid Restoration spec (28), answered with a refusal.
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_spend_bot_talents());
+            SpendBotTalentsAction const& talents = in.action_request().spend_bot_talents();
+            EXPECT_IN(coreFails, talents.bot_guid() == 44 && talents.role() == 2 && talents.spec() == 28);
+            reply(in.action_request().message_id(), false);
+        }
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "talents-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    bool gotOld = false;
+    bool gotSpec = false;
+    bool gotRefusal = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        client.SpendBotTalents(42, ModuleClient::TalentRole::kDps, [&](ActionReply const& r) { gotOld = r.success(); });
+        client.SpendBotTalents(43, ModuleClient::TalentRole::kDps, TalentSpec::kHunterBm, [&](ActionReply const& r) { gotSpec = r.success(); });
+        client.SpendBotTalents(44, ModuleClient::TalentRole::kHealer, TalentSpec::kDruidResto,
+                               [&](ActionReply const& r) { gotRefusal = !r.success() && r.reason() == "in combat"; });
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, gotOld);
+    EXPECT_IN(clientFails, gotSpec);
+    EXPECT_IN(clientFails, gotRefusal);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 int main()
 {
     int failedScenarios = 0;
@@ -1105,5 +1222,6 @@ int main()
     Report("quest item loot answered with a share action", RunShareScenario(), failedScenarios);
     Report("vendor/AH purchases carry the bot identity and browse events correlate", RunEconomyActorScenario(), failedScenarios);
     Report("bot speech and bot trade: whisper, list bags, set item, trade event", RunBotTradeScenario(), failedScenarios);
+    Report("bot talents: role only, role and spec, refusal", RunTalentsScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

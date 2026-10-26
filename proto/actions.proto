@@ -106,14 +106,16 @@ message BotTradeAction {
   optional uint64 copper = 5;
 }
 
-// Tells the core which role a bot plays, so the bot spends its talent points by the profile for its (class, role) (core setting
-// Bot.Talents.Profiles). The core knows the bot's class; the module owns the role (BotState::Role_, or what Auto gives the class).
+// Tells the core which role (and, since protocol 18, which spec) a bot plays, so the bot spends its talent points by the profile for its
+// (class, spec) or else its (class, role) (core setting Bot.Talents.Profiles). The core knows the bot's class; the module owns the role
+// (BotState::Role_, or what Auto gives the class) and the spec.
 // Send it when the bot first appears, when its role changes and after each level-up; the core spends what the level allows, out of combat,
 // and replies success false with a reason when it could not (in combat, below level 10), so the module asks again later. A bot with no
-// profile for its (class, role) gets the core's greedy allocator. Points already spent are not taken back (no respec yet).
+// profile for its (class, spec) or (class, role) gets the core's greedy allocator. Points already spent are not taken back (no respec yet).
 message SpendBotTalentsAction {
   optional uint64 bot_guid = 1;  // raw character GUID counter from BotSnapshot.guid
   optional uint32 role = 2;      // 0 none, 1 tank, 2 healer, 3 dps
+  optional uint32 spec = 3;      // 0 none, else a TalentSpec (include/forever_module/talent_spec.h: 1 to 28); it must belong to the bot's class
 }
 
 // Module store (doc 15): rows private to the requesting module, in the world database. The core takes the

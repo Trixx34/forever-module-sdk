@@ -28,6 +28,7 @@
 #include "actions.pb.h"
 #include "envelope.pb.h"
 
+#include "forever_module/talent_spec.h"
 #include "forever_module/tier2_layout.h"  // for BotAction, ActionType
 
 namespace forever_module {
@@ -187,6 +188,9 @@ public:
         kDps = 3,
     };
     std::uint64_t SpendBotTalents(std::uint64_t botGuid, TalentRole role, ActionCallback onReply = nullptr);
+    // The same with a spec (talent_spec.h, protocol 18): the core looks the bot's profile up by (class, spec) first, then by (class, role), then
+    // uses its greedy allocator. The spec must belong to the bot's class, or the reply says false. kNone is the call above.
+    std::uint64_t SpendBotTalents(std::uint64_t botGuid, TalentRole role, TalentSpec spec, ActionCallback onReply = nullptr);
 
     // --- Tier 2 bot-action convenience methods ---
     // Each builds a BotAction and queues it for this tick. The queue is attached to the tick's actions after the

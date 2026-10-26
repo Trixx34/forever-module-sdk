@@ -501,10 +501,17 @@ std::uint64_t ModuleClient::BotSpeak(std::uint64_t botGuid, SpeakKind kind, std:
 
 std::uint64_t ModuleClient::SpendBotTalents(std::uint64_t botGuid, TalentRole role, ActionCallback onReply)
 {
+    return SpendBotTalents(botGuid, role, TalentSpec::kNone, std::move(onReply));
+}
+
+std::uint64_t ModuleClient::SpendBotTalents(std::uint64_t botGuid, TalentRole role, TalentSpec spec, ActionCallback onReply)
+{
     ActionRequest request;
     SpendBotTalentsAction* talents = request.mutable_spend_bot_talents();
     talents->set_bot_guid(botGuid);
     talents->set_role(static_cast<std::uint32_t>(role));
+    if (spec != TalentSpec::kNone)
+        talents->set_spec(static_cast<std::uint32_t>(spec));
     return RequestAction(std::move(request), std::move(onReply));
 }
 

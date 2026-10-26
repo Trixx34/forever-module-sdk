@@ -1,5 +1,18 @@
 # Changelog
 
+## SDK package 0.21.0 (2026-10-26): protocol 18 (talent specs)
+
+- `SpendBotTalentsAction` gains `spec` (3, optional uint32): a `TalentSpec` (`include/forever_module/talent_spec.h`, 1 to 28: warrior arms, fury,
+  prot; paladin holy, prot, ret; hunter bm, mm, sv; rogue assassination, combat, subtlety; priest disc, holy, shadow; shaman ele, enh, resto; mage
+  arcane, fire, frost; warlock affliction, demonology, destruction; druid balance, feral_tank, feral_cat, resto), or 0 for none. It must belong to the
+  bot's class, or the core answers false. The core spends the bot's points by the profile for its (class, spec) first, then (class, role), then its
+  greedy allocator. A profile file line is `<classId> <key> <nodeId>:<ranks>,...` where the key is `tank`, `healer`, `dps` or a spec key.
+- `ModuleClient::SpendBotTalents(bot, role, spec, onReply)` is new; `SpendBotTalents(bot, role, onReply)` stays and sends no spec. The header
+  `talent_spec.h` also has the table (`kTalentSpecs`, `GetTalentSpecInfo`, `TalentSpecFromKey`); the core keeps the same table in `Bots/BotTalentSpec.h`
+  and its interop test compares the two.
+- Protocol `"18"` (was `"17"`): the Tier 1 schema changed (a new field), so every module must be rebuilt (module.json `protocol_version` `"18"`).
+  The Tier 2 layout is unchanged (`kTier2LayoutVersion` stays 21).
+
 ## SDK package 0.20.0 (2026-10-25): protocol 17 (bot talent profiles)
 
 - `ActionRequest` gains `spend_bot_talents` (22, `SpendBotTalentsAction`: `bot_guid`, and `role`: 0 none, 1 tank, 2 healer, 3 dps). The core
