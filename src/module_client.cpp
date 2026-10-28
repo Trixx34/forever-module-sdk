@@ -451,6 +451,23 @@ std::uint64_t ModuleClient::AuctionHouseForBot(std::uint64_t botGuid, AuctionHou
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::AuctionBrowseByFilterForBot(std::uint64_t botGuid, std::uint64_t auctioneerGuid, AuctionBrowseFilter const& filter,
+                                                        ActionCallback onReply)
+{
+    ActionRequest request;
+    AuctionHouseAction* ah = request.mutable_auction_house();
+    ah->set_op(AuctionHouseAction::kBrowse);
+    ah->set_auctioneer_guid(auctioneerGuid);
+    ah->set_player_guid(botGuid);
+    ah->set_inventory_type(filter.inventoryType);
+    ah->set_min_level(filter.minLevel);
+    ah->set_max_level(filter.maxLevel);
+    ah->set_max_results(filter.maxResults);
+    ah->set_max_buyout(filter.maxBuyout);
+    ah->set_only_upgrades(filter.onlyUpgrades);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 // Queues a single bot action for this pass. Attaches Tier 2 on first use, so the convenience methods work without a
 // separate AttachTier2() call. FlushBotActions() sends the queue once the callbacks for the pass have run.
 bool ModuleClient::PublishBotAction(BotAction const& action)

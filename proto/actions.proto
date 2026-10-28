@@ -2,6 +2,8 @@
 syntax = "proto2";
 package forever_module;
 
+import "events.proto";
+
 // Module -> core requests that core carries out on the world thread (doc/module-system: Actions).
 // Core never blocks the module on these: the request is queued, executed on a later world tick, and
 // answered with an ActionReply carrying the same message id. Core re-checks everything it is asked
@@ -40,7 +42,7 @@ message BuyItemAction {
 // player has the money/item at execution time; the module's view can be stale.
 message AuctionHouseAction {
   enum AHOp {
-    kBrowse = 0;   // scan the AH for item_entry (results delivered via a PlayerScript.OnAuctionResult notify)
+    kBrowse = 0;   // scan the AH for item_entry (results delivered via a PlayerScript.OnAuctionResult notify), or by filter (see inventory_type)
     kBid = 1;      // bid on auction_guid, offering bid copper
     kBuyout = 2;   // buy out auction_guid at buyout copper
     kList = 3;     // list item_guid (from bags) as a stack of count at bid/buyout copper
@@ -55,6 +57,16 @@ message AuctionHouseAction {
   optional uint32 bid = 7;              // copper, for kBid/kList
   optional uint32 buyout = 8;           // copper, for kList
   optional uint64 player_guid = 9;      // raw character GUID counter from BotSnapshot.guid; required for actions using its money/items
+  // kBrowse by filter (protocol 19). Used when item_entry is 0 and inventory_type is not 0: the core looks through the whole house for the
+  // bot in player_guid and answers with the matching listings in ActionReply.listings (no PlayerScript.OnAuctionResult events, so the
+  // module needs no hook), cheapest buyout first. Only listings with a buyout, not the bot's own, and not a stack are considered. With
+  // item_entry set the browse is the old one (events, one item entry) and these fields are ignored.
+  optional uint32 inventory_type = 10;  // InventoryType (1 head ... 26 ranged right); 0 = no filter (then item_entry is needed)
+  optional uint32 min_level = 11;       // required level of the item, from; 0 = no lower bound
+  optional uint32 max_level = 12;       // ... up to; 0 = no upper bound
+  optional uint32 max_results = 13;     // at most this many listings; 0 = the core's default (10), capped at 50
+  optional uint32 max_buyout = 14;      // copper: no listing dearer than this; 0 = no bound
+  optional bool only_upgrades = 15;     // only listings whose upgrade_score is above 0 for this bot
 }
 
 // Writes one line to the core's server log (Server.log), tagged with the module's name. level 0 is info, 1 warning, 2 error; text is
@@ -169,4 +181,5 @@ message ActionReply {
   optional uint32 item_entry = 10;   // AuctionHouse kList: the entry of the auction created, to correlate with results
   optional uint64 auction_guid = 11; // AuctionHouse kList: the guid of the auction core created
   repeated TradeBagItem bag_items = 12; // BotTrade kListBags: the items the bot can trade now
+  repeated AuctionListingEvent listings = 13; // AuctionHouse kBrowse by filter (protocol 19): the matching listings, cheapest buyout first
 }

@@ -1,5 +1,19 @@
 # Changelog
 
+## SDK package 0.22.0 (2026-10-28): protocol 19 (auction buy)
+
+- `AuctionHouseAction` gains a browse by filter: `inventory_type` (10), `min_level` (11), `max_level` (12), `max_results` (13), `max_buyout` (14) and
+  `only_upgrades` (15), all optional. It is used when `item_entry` is 0 and `inventory_type` is not 0 (a kBrowse with an item entry is the old browse,
+  unchanged). The core looks through the whole house for the bot in `player_guid` and answers with the matching listings in the new
+  `ActionReply.listings` (13, repeated `AuctionListingEvent`), cheapest buyout first, so the module needs no `PlayerScript.OnAuctionResult` hook and
+  no new approval. Only listings with a buyout, not the bot's own and not a stack are returned.
+- `AuctionListingEvent` gains `inventory_type` (12), `quality` (13), `required_level` (14), `item_level` (15) and `upgrade_score` (16): how much better
+  the item is for the requesting bot than what it wears where the item goes, by the core's AutoGear score (0 = not an upgrade).
+- A kBid or kBuyout the core did not place answers `success = false` with a reason (it already did on `test`; the SDK doc now says so).
+- `ModuleClient::AuctionBrowseByFilterForBot(bot, auctioneer, AuctionBrowseFilter, onReply)` is new. The existing calls are unchanged.
+- Protocol `"19"` (was `"18"`): the Tier 1 schema changed (new fields), so every module must be rebuilt (module.json `protocol_version` `"19"`), as for
+  every earlier field. The Tier 2 layout is unchanged (`kTier2LayoutVersion` stays 21).
+
 ## SDK package 0.21.0 (2026-10-26): protocol 18 (talent specs)
 
 - `SpendBotTalentsAction` gains `spec` (3, optional uint32): a `TalentSpec` (`include/forever_module/talent_spec.h`, 1 to 28: warrior arms, fury,

@@ -57,6 +57,13 @@ message AuctionListingEvent {
   optional uint32 total_matches = 9;   // total listings matching the browse query
   optional uint64 player_guid = 10;    // requesting bot's raw character GUID counter; 0 for player-originated events
   optional uint64 request_id = 11;     // ActionRequest.message_id for this browse; 0 when not request-correlated
+  // Protocol 19, filled by a browse by filter (AuctionHouseAction.inventory_type); 0 when the core did not fill them.
+  optional uint32 inventory_type = 12; // the item's InventoryType
+  optional uint32 quality = 13;        // 0 grey, 1 white, 2 green, 3 blue, 4 epic, 5 legendary
+  optional uint32 required_level = 14;
+  optional uint32 item_level = 15;
+  optional uint32 upgrade_score = 16;  // how much better the item is for the requesting bot than what it wears where the item goes, by the core's
+                                       // AutoGear score (item level first, then the stats its class uses); 0 = not an upgrade, or the bot cannot use it
 }
 
 message WorldStartupEvent {
