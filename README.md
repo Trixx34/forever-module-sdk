@@ -22,7 +22,8 @@ The design docs live in the core repository, not in this one: `doc/module-system
   (give a looted quest item to the party members who need it), and the module store (`StoreGet`, `StoreSet`, `StoreDelete`,
   `StoreList`): rows private to the module.
 - Bot control: `RequestControl` (spawn or reclaim a bot), `ReleaseControl`, `OnControlRevoked`, and `SpendBotTalents` (the bot's
-  role, so the core spends its talent points by the profile for its class and role; out of combat, as the level allows).
+  role and, since protocol 18, its spec (`talent_spec.h`), so the core spends its talent points by the profile for its class and spec or role; out of
+  combat, as the level allows).
 
 **Tier 2 (`Tier2Session`, shared memory)**
 - A snapshot of every controlled bot each tick (position, health, power, level, combat state, the result of its last action,

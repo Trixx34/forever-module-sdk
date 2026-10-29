@@ -28,6 +28,7 @@
 #include "actions.pb.h"
 #include "envelope.pb.h"
 
+#include "forever_module/talent_spec.h"
 #include "forever_module/tier2_layout.h"  // for BotAction, ActionType
 
 namespace forever_module {
@@ -154,6 +155,22 @@ public:
                                      std::uint32_t itemEntry = 0, std::uint32_t count = 0,
                                      std::uint32_t bid = 0, std::uint32_t buyout = 0,
                                      ActionCallback onReply = nullptr);
+    // Browse the house by filter for a controlled bot (protocol 19): the core looks through the whole house for listings of inventoryType (an
+    // InventoryType, 1 to 26) with a buyout, not the bot's own, inside the level range and the buyout bound, and answers in the reply's
+    // listings(), cheapest buyout first, at most maxResults of them (0 = the core's default, 10; the core caps it at 50). Each listing carries
+    // item_level, quality, required_level and upgrade_score (0 = no upgrade for this bot). With onlyUpgrades only the listings with a score
+    // above 0 come back. A bid or a buyout (AuctionHouseForBot with kBuyout) answers success = false and a reason when the core did not place it.
+    struct AuctionBrowseFilter
+    {
+        std::uint32_t inventoryType = 0;
+        std::uint32_t minLevel = 0;
+        std::uint32_t maxLevel = 0;
+        std::uint32_t maxResults = 0;
+        std::uint32_t maxBuyout = 0;
+        bool onlyUpgrades = false;
+    };
+    std::uint64_t AuctionBrowseByFilterForBot(std::uint64_t botGuid, std::uint64_t auctioneerGuid, AuctionBrowseFilter const& filter,
+                                              ActionCallback onReply = nullptr);
 
     // A bot speaks: /say (kSay) or a whisper to playerGuid (kWhisper). text is 1 to 255 bytes. The core sends it as the bot's own chat line.
     enum class SpeakKind : std::uint32_t {
@@ -187,6 +204,9 @@ public:
         kDps = 3,
     };
     std::uint64_t SpendBotTalents(std::uint64_t botGuid, TalentRole role, ActionCallback onReply = nullptr);
+    // The same with a spec (talent_spec.h, protocol 18): the core looks the bot's profile up by (class, spec) first, then by (class, role), then
+    // uses its greedy allocator. The spec must belong to the bot's class, or the reply says false. kNone is the call above.
+    std::uint64_t SpendBotTalents(std::uint64_t botGuid, TalentRole role, TalentSpec spec, ActionCallback onReply = nullptr);
 
     // --- Tier 2 bot-action convenience methods ---
     // Each builds a BotAction and queues it for this tick. The queue is attached to the tick's actions after the

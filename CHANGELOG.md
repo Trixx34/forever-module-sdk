@@ -1,5 +1,32 @@
 # Changelog
 
+## SDK package 0.22.0 (2026-10-28): protocol 19 (auction buy)
+
+- `AuctionHouseAction` gains a browse by filter: `inventory_type` (10), `min_level` (11), `max_level` (12), `max_results` (13), `max_buyout` (14) and
+  `only_upgrades` (15), all optional. It is used when `item_entry` is 0 and `inventory_type` is not 0 (a kBrowse with an item entry is the old browse,
+  unchanged). The core looks through the whole house for the bot in `player_guid` and answers with the matching listings in the new
+  `ActionReply.listings` (13, repeated `AuctionListingEvent`), cheapest buyout first, so the module needs no `PlayerScript.OnAuctionResult` hook and
+  no new approval. Only listings with a buyout, not the bot's own and not a stack are returned.
+- `AuctionListingEvent` gains `inventory_type` (12), `quality` (13), `required_level` (14), `item_level` (15) and `upgrade_score` (16): how much better
+  the item is for the requesting bot than what it wears where the item goes, by the core's AutoGear score (0 = not an upgrade).
+- A kBid or kBuyout the core did not place answers `success = false` with a reason (it already did on `test`; the SDK doc now says so).
+- `ModuleClient::AuctionBrowseByFilterForBot(bot, auctioneer, AuctionBrowseFilter, onReply)` is new. The existing calls are unchanged.
+- Protocol `"19"` (was `"18"`): the Tier 1 schema changed (new fields), so every module must be rebuilt (module.json `protocol_version` `"19"`), as for
+  every earlier field. The Tier 2 layout is unchanged (`kTier2LayoutVersion` stays 21).
+
+## SDK package 0.21.0 (2026-10-26): protocol 18 (talent specs)
+
+- `SpendBotTalentsAction` gains `spec` (3, optional uint32): a `TalentSpec` (`include/forever_module/talent_spec.h`, 1 to 28: warrior arms, fury,
+  prot; paladin holy, prot, ret; hunter bm, mm, sv; rogue assassination, combat, subtlety; priest disc, holy, shadow; shaman ele, enh, resto; mage
+  arcane, fire, frost; warlock affliction, demonology, destruction; druid balance, feral_tank, feral_cat, resto), or 0 for none. It must belong to the
+  bot's class, or the core answers false. The core spends the bot's points by the profile for its (class, spec) first, then (class, role), then its
+  greedy allocator. A profile file line is `<classId> <key> <nodeId>:<ranks>,...` where the key is `tank`, `healer`, `dps` or a spec key.
+- `ModuleClient::SpendBotTalents(bot, role, spec, onReply)` is new; `SpendBotTalents(bot, role, onReply)` stays and sends no spec. The header
+  `talent_spec.h` also has the table (`kTalentSpecs`, `GetTalentSpecInfo`, `TalentSpecFromKey`); the core keeps the same table in `Bots/BotTalentSpec.h`
+  and its interop test compares the two.
+- Protocol `"18"` (was `"17"`): the Tier 1 schema changed (a new field), so every module must be rebuilt (module.json `protocol_version` `"18"`).
+  The Tier 2 layout is unchanged (`kTier2LayoutVersion` stays 21).
+
 ## SDK package 0.20.0 (2026-10-25): protocol 17 (bot talent profiles)
 
 - `ActionRequest` gains `spend_bot_talents` (22, `SpendBotTalentsAction`: `bot_guid`, and `role`: 0 none, 1 tank, 2 healer, 3 dps). The core

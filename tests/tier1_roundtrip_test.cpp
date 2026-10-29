@@ -1093,6 +1093,260 @@ Failures RunBotTradeScenario()
     return all;
 }
 
+// SpendBotTalents (protocol 18): the old call sends no spec, the new one sends role and spec, kNone leaves the field out.
+Failures RunTalentsScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("talents");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(14);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+        auto reply = [&](std::uint64_t id, bool success)
+        {
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* r = out.mutable_action_reply();
+            r->set_message_id(id);
+            r->set_success(success);
+            if (!success)
+                r->set_reason("in combat");
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        };
+
+        // 1: the protocol 17 call (role only): no spec on the wire.
+        bool got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_spend_bot_talents());
+            SpendBotTalentsAction const& talents = in.action_request().spend_bot_talents();
+            EXPECT_IN(coreFails, talents.bot_guid() == 42 && talents.role() == 3 && !talents.has_spec());
+            reply(in.action_request().message_id(), true);
+        }
+        // 2: role and spec (hunter Beast Mastery = 7).
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_spend_bot_talents());
+            SpendBotTalentsAction const& talents = in.action_request().spend_bot_talents();
+            EXPECT_IN(coreFails, talents.bot_guid() == 43 && talents.role() == 3 && talents.has_spec() && talents.spec() == 7);
+            reply(in.action_request().message_id(), true);
+        }
+        // 3: healer role with the druid Restoration spec (28), answered with a refusal.
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_spend_bot_talents());
+            SpendBotTalentsAction const& talents = in.action_request().spend_bot_talents();
+            EXPECT_IN(coreFails, talents.bot_guid() == 44 && talents.role() == 2 && talents.spec() == 28);
+            reply(in.action_request().message_id(), false);
+        }
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "talents-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    bool gotOld = false;
+    bool gotSpec = false;
+    bool gotRefusal = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        client.SpendBotTalents(42, ModuleClient::TalentRole::kDps, [&](ActionReply const& r) { gotOld = r.success(); });
+        client.SpendBotTalents(43, ModuleClient::TalentRole::kDps, TalentSpec::kHunterBm, [&](ActionReply const& r) { gotSpec = r.success(); });
+        client.SpendBotTalents(44, ModuleClient::TalentRole::kHealer, TalentSpec::kDruidResto,
+                               [&](ActionReply const& r) { gotRefusal = !r.success() && r.reason() == "in combat"; });
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, gotOld);
+    EXPECT_IN(clientFails, gotSpec);
+    EXPECT_IN(clientFails, gotRefusal);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
+// Auction browse by filter (protocol 19): the filter fields reach the core, the listings come back in the reply with the new fields, and a
+// buyout the core did not place answers success = false with a reason.
+Failures RunAuctionBuyScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("auctionbuy");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(15);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+
+        // 1: the filter browse.
+        bool got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_auction_house());
+            AuctionHouseAction const& ah = in.action_request().auction_house();
+            EXPECT_IN(coreFails, ah.op() == AuctionHouseAction::kBrowse && ah.player_guid() == 42 && ah.auctioneer_guid() == 9002);
+            EXPECT_IN(coreFails, ah.inventory_type() == 7 && ah.min_level() == 5 && ah.max_level() == 15 && ah.max_results() == 8 &&
+                                     ah.max_buyout() == 4000 && ah.only_upgrades() && !ah.has_item_entry());
+            std::uint64_t const id = in.action_request().message_id();
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(id);
+            reply->set_success(true);
+            for (std::uint32_t i = 0; i < 2; ++i)
+            {
+                AuctionListingEvent* listing = reply->add_listings();
+                listing->set_player_guid(42);
+                listing->set_request_id(id);
+                listing->set_auction_guid(900 + i);
+                listing->set_item_entry(2000 + i);
+                listing->set_count(1);
+                listing->set_buyout(1000 + 500 * i);
+                listing->set_inventory_type(7);
+                listing->set_quality(2);
+                listing->set_required_level(10);
+                listing->set_item_level(12 + i);
+                listing->set_upgrade_score(30 + i);
+            }
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+        // 2: the buyout, refused.
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            AuctionHouseAction const& ah = in.action_request().auction_house();
+            EXPECT_IN(coreFails, ah.op() == AuctionHouseAction::kBuyout && ah.auction_guid() == 900 && ah.buyout() == 1000 && ah.player_guid() == 42);
+            std::uint64_t const id = in.action_request().message_id();
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* reply = out.mutable_action_reply();
+            reply->set_message_id(id);
+            reply->set_success(false);
+            reply->set_reason("not enough money");
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        }
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "auctionbuy-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    bool gotListings = false;
+    bool gotRefusal = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        ModuleClient::AuctionBrowseFilter filter;
+        filter.inventoryType = 7;
+        filter.minLevel = 5;
+        filter.maxLevel = 15;
+        filter.maxResults = 8;
+        filter.maxBuyout = 4000;
+        filter.onlyUpgrades = true;
+        client.AuctionBrowseByFilterForBot(42, 9002, filter, [&](ActionReply const& r)
+        {
+            gotListings = r.success() && r.listings_size() == 2 && r.listings(0).auction_guid() == 900 && r.listings(0).upgrade_score() == 30 &&
+                          r.listings(1).buyout() == 1500 && r.listings(1).inventory_type() == 7 && r.listings(1).quality() == 2 &&
+                          r.listings(1).required_level() == 10 && r.listings(1).item_level() == 13;
+            client.AuctionHouseForBot(42, ModuleClient::AuctionHouseOp::kBuyout, 9002, 0, 900, 0, 0, 0, 1000, [&](ActionReply const& b)
+            {
+                gotRefusal = !b.success() && b.reason() == "not enough money";
+            });
+        });
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, gotListings);
+    EXPECT_IN(clientFails, gotRefusal);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 int main()
 {
     int failedScenarios = 0;
@@ -1105,5 +1359,7 @@ int main()
     Report("quest item loot answered with a share action", RunShareScenario(), failedScenarios);
     Report("vendor/AH purchases carry the bot identity and browse events correlate", RunEconomyActorScenario(), failedScenarios);
     Report("bot speech and bot trade: whisper, list bags, set item, trade event", RunBotTradeScenario(), failedScenarios);
+    Report("bot talents: role only, role and spec, refusal", RunTalentsScenario(), failedScenarios);
+    Report("auction browse by filter: listings in the reply, a refused buyout", RunAuctionBuyScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

@@ -1,9 +1,11 @@
 // ModuleClient without a core: the Tier 2 convenience methods refuse what they cannot send, and tier2_error() says why.
 
 #include "forever_module/module_client.h"
+#include "forever_module/talent_spec.h"
 
 #include <cstdio>
 #include <string>
+#include <string_view>
 
 using namespace forever_module;
 
@@ -23,6 +25,33 @@ int g_failures = 0;
 
 int main()
 {
+    // The talent spec table (protocol 18): rows in id order, every spec of the nine classes, a key unique inside its class, and the lookups agree.
+    {
+        CHECK(kTalentSpecs.size() == 28 && kLastTalentSpec == 28);
+        CHECK(GetTalentSpecInfo(TalentSpec::kNone) == nullptr);
+        CHECK(GetTalentSpecInfo(static_cast<TalentSpec>(kLastTalentSpec + 1)) == nullptr);
+        for (std::uint32_t id = 1; id <= kLastTalentSpec; ++id)
+        {
+            TalentSpecInfo const* info = GetTalentSpecInfo(static_cast<TalentSpec>(id));
+            CHECK(info && static_cast<std::uint32_t>(info->Spec) == id);
+            if (!info)
+                continue;
+            CHECK(TalentSpecFromKey(info->ClassId, info->Key) == info->Spec);
+            for (std::uint32_t other = id + 1; other <= kLastTalentSpec; ++other)
+            {
+                TalentSpecInfo const* o = GetTalentSpecInfo(static_cast<TalentSpec>(other));
+                CHECK(!(o->ClassId == info->ClassId && std::string_view(o->Key) == info->Key));
+            }
+        }
+        CHECK(TalentSpecFromKey(3, "bm") == TalentSpec::kHunterBm);
+        CHECK(TalentSpecFromKey(1, "prot") == TalentSpec::kWarriorProt && TalentSpecFromKey(2, "prot") == TalentSpec::kPaladinProt);
+        CHECK(TalentSpecFromKey(7, "resto") == TalentSpec::kShamanResto && TalentSpecFromKey(11, "resto") == TalentSpec::kDruidResto);
+        CHECK(TalentSpecFromKey(11, "feral_cat") == TalentSpec::kDruidFeralCat && TalentSpecFromKey(11, "feral_tank") == TalentSpec::kDruidFeralTank);
+        CHECK(TalentSpecFromKey(3, "prot") == TalentSpec::kNone);                                       // not a hunter spec
+        CHECK(TalentSpecFromKey(3, "dps") == TalentSpec::kNone && TalentSpecFromKey(3, "tank") == TalentSpec::kNone && TalentSpecFromKey(5, "healer") == TalentSpec::kNone); // roles are not specs
+        CHECK(TalentSpecFromKey(6, "bm") == TalentSpec::kNone);                                         // class 6 (death knight) does not exist here
+    }
+
     // A quest id must fit in the 24 bits under the operation byte. Anything larger is refused, not sent with its
     // high bits merged into the operation.
     {
