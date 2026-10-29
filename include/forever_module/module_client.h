@@ -212,9 +212,10 @@ public:
     // Each builds a BotAction and queues it for this tick. The queue is attached to the tick's actions after the
     // callbacks for the pass have run, in one PublishActions() call, so actions from several calls in one pass are
     // all sent. The queue is attached to the snapshot most recently read; if no snapshot has been read yet, the
-    // queued action is kept until one is. The reply arrives asynchronously through onReply (if non-null), and the
-    // result is also reflected in the bot's BotSnapshot::last_action_* fields on the next Tier 2 tick. Tier 2 is
-    // attached on first use; if that fails, the method does nothing and tier2_error() says why.
+    // queued action is kept until one is. Tier 2 actions have no Tier 1 reply: onReply is accepted for call-site
+    // symmetry with the Tier 1 action methods above but is never invoked; the result is reflected only in the
+    // bot's BotSnapshot::last_action_* fields on the next Tier 2 tick (read it from there). Tier 2 is attached on
+    // first use; if that fails, the method does nothing and tier2_error() says why.
 
     void CastSpell(std::uint64_t botGuid, std::uint32_t spellId, std::uint64_t targetGuid = 0,
                    ActionCallback onReply = nullptr);
@@ -304,6 +305,10 @@ private:
     void StartHeartbeat();
     void StopHeartbeat();
     bool Dispatch(Envelope const& envelope); // false means stop the Run() loop
+
+    // Checks a quest id fits in the 24 bits available under BotAction::spell_id's operation byte (QuestAccept/
+    // QuestTurnIn/QuestAbandon). On failure, records why in tier2Error_ and returns false.
+    bool CheckQuestId(std::uint32_t questId);
 
     // Queues a single BotAction for the next Tier 2 publish. Returns false if Tier 2 is not attached or the queue is full.
     bool PublishBotAction(BotAction const& action);
