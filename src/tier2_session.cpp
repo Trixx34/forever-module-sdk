@@ -6,7 +6,7 @@
 #include <new>
 #include <span>
 
-#include <boost/interprocess/mapped_region.hpp>
+#include <boost/interprocess/mappedregion_.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 
 namespace bi = boost::interprocess;
@@ -25,13 +25,13 @@ static_assert(sizeof(BotAction) == 40, "BotAction changed size: bump kTier2Layou
 
 struct Tier2Session::Region
 {
-    Region(bi::shared_memory_object&& shm, bi::mapped_region&& map)
+    Region(bi::shared_memory_object&& shm, bi::mappedregion_&& map)
         : shm(std::move(shm)), map(std::move(map))
     {
     }
 
     bi::shared_memory_object shm;
-    bi::mapped_region map;
+    bi::mappedregion_ map;
     Tier2RegionHeader* header = nullptr;
 
     Tier2RegionHeader& Header() const { return *header; }
@@ -47,7 +47,7 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
     try
     {
         bi::shared_memory_object shm(bi::open_only, regionName.c_str(), bi::read_write);
-        bi::mapped_region map(shm, bi::read_write);
+        bi::mappedregion_ map(shm, bi::read_write);
 
         if (map.get_size() < sizeof(Tier2RegionHeader))
         {
@@ -71,8 +71,8 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
         }
 
         std::unique_ptr<Tier2Session> session(new Tier2Session());
-        session->_region = std::make_unique<Region>(std::move(shm), std::move(map));
-        session->_region->header = header;
+        session->region_ = std::make_unique<Region>(std::move(shm), std::move(map));
+        session->region_->header = header;
         return session;
     }
     catch (std::exception const& e)
@@ -85,27 +85,27 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
 
 std::uint32_t Tier2Session::MaxBots() const
 {
-    return _region->Header().max_bots;
+    return region_->Header().max_bots;
 }
 
 std::uint32_t Tier2Session::MaxNearbyUnits() const
 {
-    return _region->Header().max_nearby_units;
+    return region_->Header().max_nearby_units;
 }
 
 std::uint32_t Tier2Session::MaxActions() const
 {
-    return _region->Header().max_actions;
+    return region_->Header().max_actions;
 }
 
 std::uint32_t Tier2Session::TickInterval() const
 {
-    return _region->Header().tick_interval;
+    return region_->Header().tick_interval;
 }
 
 WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
 {
-    Region const& region = *_region;
+    Region const& region = *region_;
     Tier2RegionHeader const& header = region.Header();
     std::uint32_t const maxBots = header.max_bots;
     std::uint32_t const maxNearby = header.max_nearby_units;
@@ -138,12 +138,12 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
         if (header.published_snapshot_buffer.load(std::memory_order_acquire) == buffer &&
             header.published_snapshot_tick.load(std::memory_order_acquire) == tick)
         {
-            _lastSnapshot = std::move(fresh);
-            _haveSnapshot = true;
+            lastSnapshot_ = std::move(fresh);
+            haveSnapshot_ = true;
             break;
         }
     }
-    return _lastSnapshot;
+    return lastSnapshot_;
 }
 
 std::span<NearbyUnit const> WorldTickSnapshotView::NearbyOf(std::size_t botIndex) const
@@ -156,10 +156,10 @@ std::span<NearbyUnit const> WorldTickSnapshotView::NearbyOf(std::size_t botIndex
 
 bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::string& error)
 {
-    Tier2RegionHeader& header = _region->Header();
+    Tier2RegionHeader& header = region_->Header();
 
     // The actions answer a snapshot, and their tick is that snapshot's tick: without one read, the core could not match them.
-    if (!_haveSnapshot)
+    if (!haveSnapshot_)
     {
         error = "no snapshot has been read yet: call ReadLatestSnapshot() before PublishActions()";
         return false;
@@ -188,16 +188,16 @@ bool Tier2Session::PublishActions(std::vector<BotAction> const& actions, std::st
         return false;
     }
     std::uint8_t const target = published ^ 1;
-    std::byte* base = _region->MutableBase() + Tier2ActionBufferOffset(header.max_bots, header.max_nearby_units,
+    std::byte* base = region_->MutableBase() + Tier2ActionBufferOffset(header.max_bots, header.max_nearby_units,
                                                                         header.max_actions, target);
 
     auto* queue = new (base) ActionQueueHeader();
-    queue->tick_number = _lastSnapshot.tick_number;
+    queue->tick_number = lastSnapshot_.tick_number;
     queue->action_count = static_cast<std::uint32_t>(actions.size());
     if (!actions.empty())
         std::memcpy(static_cast<void*>(queue + 1), actions.data(), actions.size() * sizeof(BotAction));
 
-    header.published_action_tick.store(_lastSnapshot.tick_number, std::memory_order_release);
+    header.published_action_tick.store(lastSnapshot_.tick_number, std::memory_order_release);
     header.published_action_buffer.store(target, std::memory_order_release);
     return true;
 }

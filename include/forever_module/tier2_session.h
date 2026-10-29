@@ -47,7 +47,7 @@ public:
     std::uint32_t TickInterval() const;
 
     // True once ReadLatestSnapshot() has copied a whole snapshot. PublishActions() needs one.
-    bool HasSnapshot() const { return _haveSnapshot; }
+    bool HasSnapshot() const { return haveSnapshot_; }
 
     // Non-blocking. Returns the most recently published snapshot. If the core publishes while it is copied, the copy
     // is retried. If all retries are torn, the previous snapshot is returned, so the result is always one complete
@@ -66,9 +66,9 @@ private:
     Tier2Session();
 
     struct Region;
-    std::unique_ptr<Region> _region;
-    WorldTickSnapshotView _lastSnapshot;
-    bool _haveSnapshot = false;
+    std::unique_ptr<Region> region_;
+    WorldTickSnapshotView lastSnapshot_;
+    bool haveSnapshot_ = false;
 };
 
 } // namespace forever_module

@@ -483,6 +483,16 @@ bool ModuleClient::PublishBotAction(BotAction const& action)
     return true;
 }
 
+bool ModuleClient::CheckQuestId(std::uint32_t questId)
+{
+    if (questId >= kQuestIdLimit)
+    {
+        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+        return false;
+    }
+    return true;
+}
+
 // Sends the queued actions in one publish. Waits while no snapshot has been read, since the actions answer one.
 // A publish that fails is dropped and logged, because the bounds were checked when each action was queued.
 void ModuleClient::FlushBotActions()
@@ -693,11 +703,8 @@ void ModuleClient::GroupLeave(std::uint64_t botGuid, ActionCallback onReply)
 void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;
-    if (questId >= kQuestIdLimit)
-    {
-        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+    if (!CheckQuestId(questId))
         return;
-    }
     BotAction action;
     action.bot_guid = botGuid;
     action.type = ActionType::kQuest;
@@ -708,11 +715,8 @@ void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, Act
 void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;
-    if (questId >= kQuestIdLimit)
-    {
-        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+    if (!CheckQuestId(questId))
         return;
-    }
     BotAction action;
     action.bot_guid = botGuid;
     action.type = ActionType::kQuest;
@@ -723,11 +727,8 @@ void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, Act
 void ModuleClient::QuestAbandon(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;
-    if (questId >= kQuestIdLimit)
-    {
-        tier2Error_ = "quest id " + std::to_string(questId) + " does not fit in 24 bits";
+    if (!CheckQuestId(questId))
         return;
-    }
     BotAction action;
     action.bot_guid = botGuid;
     action.type = ActionType::kQuest;

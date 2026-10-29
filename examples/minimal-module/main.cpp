@@ -1,6 +1,7 @@
 // Smallest possible module using forever_module_sdk: connects to core, handshakes, and logs when the
-// world starts. It is the fork point for the core repo's "Hello Module" walkthrough. Tier 2 and bot
-// control are not in this SDK version, so this module uses Tier 1 only.
+// world starts. It is the fork point for the core repo's "Hello Module" walkthrough. This example
+// only uses Tier 1 for simplicity; see tier2_session.h and ModuleClient's bot-action convenience
+// methods (module_client.h) for Tier 2 shared-memory and bot control, which this SDK fully supports.
 
 #include <iostream>
 
