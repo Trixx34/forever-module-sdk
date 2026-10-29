@@ -6,7 +6,7 @@
 #include <new>
 #include <span>
 
-#include <boost/interprocess/mappedregion_.hpp>
+#include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 
 namespace bi = boost::interprocess;
@@ -25,13 +25,13 @@ static_assert(sizeof(BotAction) == 40, "BotAction changed size: bump kTier2Layou
 
 struct Tier2Session::Region
 {
-    Region(bi::shared_memory_object&& shm, bi::mappedregion_&& map)
+    Region(bi::shared_memory_object&& shm, bi::mapped_region&& map)
         : shm(std::move(shm)), map(std::move(map))
     {
     }
 
     bi::shared_memory_object shm;
-    bi::mappedregion_ map;
+    bi::mapped_region map;
     Tier2RegionHeader* header = nullptr;
 
     Tier2RegionHeader& Header() const { return *header; }
@@ -47,7 +47,7 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
     try
     {
         bi::shared_memory_object shm(bi::open_only, regionName.c_str(), bi::read_write);
-        bi::mappedregion_ map(shm, bi::read_write);
+        bi::mapped_region map(shm, bi::read_write);
 
         if (map.get_size() < sizeof(Tier2RegionHeader))
         {
