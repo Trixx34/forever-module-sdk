@@ -316,6 +316,11 @@ enum class ActionType : std::uint32_t {
     kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
     kGroup = 8,  // party actions (M8). spell_id 1 invites the bot named by target_guid, 2 accepts the bot's pending invite,
                  // 3 leaves the bot's party. Refused in combat.
+                 // 40-man raid support (doc 108): spell_id 4 converts the bot's own party to a raid (leader/assistant only, idempotent
+                 // once it already is one); spell_id 5 moves the player named by target_guid into the subgroup number given in dest_x
+                 // (0-7, leader/assistant only, the group must already be a raid). No new wire field: both reuse the existing generic
+                 // spell_id/target_guid/dest_x of this one ActionType, the same way kVendor and kPetCommand already overload spell_id.
+
     kLoot = 9,   // loot the corpse named by target_guid: every item the bot may take, and the money (M7). The corpse must be
                  // dead, within 30 yards, and one the bot has the right to loot; an empty or partly looted corpse is not an error.
     kTeleport = 11, // put the bot at (map = spell_id, dest_x, dest_y, dest_z) (scenarios, doc 19). The core refuses it unless
