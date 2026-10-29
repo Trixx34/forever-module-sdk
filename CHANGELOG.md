@@ -1,5 +1,14 @@
 # Changelog
 
+## SDK package 0.23.0 (2026-10-29): protocol 20 (bot damage log)
+
+- Tier 2 layout 22: `BotSnapshot` gains the last hits the bot took, `damage_hits[]` (up to `kMaxDamageHits` = 8, oldest first, `damage_hit_count` of
+  them valid) with `damage_sequence`, the sequence of the newest hit. A `DamageHit` is the attacker's unit reference (`source_guid`, 0 for an
+  environmental source), the `spell_id` (0 for melee or auto attack), the `amount` and its `sequence`. A module keeps the last sequence it has
+  seen and treats only higher ones as new.
+- `BotSnapshot` is 1136 bytes (was 936); the size check in `src/tier2_session.cpp` is updated.
+- Protocol `"20"` (was `"19"`): the Tier 2 layout changed, so every module must be rebuilt (module.json `protocol_version` `"20"`).
+
 ## SDK package 0.22.0 (2026-10-28): protocol 19 (auction buy)
 
 - `AuctionHouseAction` gains a browse by filter: `inventory_type` (10), `min_level` (11), `max_level` (12), `max_results` (13), `max_buyout` (14) and

@@ -13,9 +13,9 @@ namespace bi = boost::interprocess;
 
 namespace forever_module {
 
-// The shared structs are the wire format the core writes. These are their sizes at layout 20 (LP64). A field added without a layout bump
+// The shared structs are the wire format the core writes. These are their sizes at layout 22 (LP64). A field added without a layout bump
 // changes a size and fails here, rather than reading the wrong bytes at run time. Update them in the same commit as the layout version.
-static_assert(sizeof(BotSnapshot) == 936, "BotSnapshot changed size: bump kTier2LayoutVersion and update this check");
+static_assert(sizeof(BotSnapshot) == 1136, "BotSnapshot changed size: bump kTier2LayoutVersion and update this check");
 static_assert(sizeof(NearbyUnit) == 48, "NearbyUnit changed size: bump kTier2LayoutVersion and update this check");
 static_assert(sizeof(GroundEffect) == 24, "GroundEffect changed size: bump kTier2LayoutVersion and update this check");
 static_assert(sizeof(Tier2RegionHeader) == 56, "Tier2RegionHeader changed size: bump kTier2LayoutVersion and update this check");

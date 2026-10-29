@@ -24,7 +24,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 21;
+inline constexpr std::uint32_t kTier2LayoutVersion = 22;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -112,6 +112,17 @@ struct QuestEntry {
     std::uint8_t status = 0;
     std::uint8_t reserved = 0;
     std::uint16_t counts[kMaxQuestObjectives] = {};
+};
+
+// Layout 22: one hit the bot took. source_guid is the attacker's unit reference (0 for an environmental source, or one that cannot be packed).
+// spell_id is the spell that dealt the damage (0 for a melee or auto attack). amount is the damage as the core applied it. sequence counts
+// every hit on the bot since it came online, so the newest hit has the highest sequence.
+inline constexpr std::size_t kMaxDamageHits = 8;
+struct DamageHit {
+    std::uint64_t source_guid = 0;
+    std::uint32_t spell_id = 0;
+    std::uint32_t amount = 0;
+    std::uint32_t sequence = 0;
 };
 
 struct BotSnapshot {
@@ -281,6 +292,11 @@ struct BotSnapshot {
     // Bot.Snapshot.GroundEffects is off.
     std::uint8_t ground_effect_count = 0;
     GroundEffect ground_effects[kMaxGroundEffects] = {};
+    // Layout 22: the last hits the bot took, the first damage_hit_count entries of damage_hits[], oldest first (the core keeps the last
+    // kMaxDamageHits). damage_sequence is the sequence of the newest hit (0 before the first); a module that has seen it already has no new hits.
+    std::uint32_t damage_sequence = 0;
+    std::uint8_t damage_hit_count = 0;
+    DamageHit damage_hits[kMaxDamageHits] = {};
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
