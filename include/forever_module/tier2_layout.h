@@ -397,7 +397,13 @@ enum class ActionType : std::uint32_t {
                          // the bot has no recipe, no materials, or its skill is too high for any recipe it can make; kBusy while another cast runs; kMoving when the
                          // recipe has a cast time and the bot moves. Refused in combat and dead. SDK 0.18: a recipe whose focus (anvil, forge, fire) is not near is
                          // not picked when another is possible; when only such recipes remain the answer is kNeedsFocus, and the module walks to a focus object.
-    kLastActionType = kSkillUp, // the highest valid value; PublishActions refuses anything above it
+    kGossip = 28,          // SDK 0.24: talk to a friendly creature and pick one of its gossip options, as a player does at an escort or quest NPC. spell_id is the
+                         // creature's entry (the nearest live one within 30 yards is used); dest_x is the option's place in the menu it shows, counted from 0 in menu order.
+                         // The bot must be within interaction range (status kOutOfRange otherwise: walk closer), out of combat and alive. The core opens the creature's menu
+                         // (its script's hello, or the database menu) and picks the option, so a scripted escort or event starts. kApplied when an option was picked;
+                         // kInvalidTarget with no such creature in reach; kRefused with a reason when the creature has no gossip, no option at that place, or the core's
+                         // Bot.Actions.Gossip is off (a scenario tool, like Bot.Actions.UseObject).
+    kLastActionType = kGossip, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

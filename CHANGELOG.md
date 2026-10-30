@@ -1,5 +1,12 @@
 # Changelog
 
+## SDK package 0.24.0 (2026-10-30): kGossip (no protocol change)
+
+- `ActionType::kGossip` (28): talk to a friendly creature and pick one of its gossip options. `spell_id` is the creature's entry (the nearest live one within 30 yards),
+  `dest_x` the option's place in the menu, counted from 0. The bot must be in interaction range, out of combat and alive. Needs `Bot.Actions.Gossip` in the core.
+  It starts a scripted event such as an escort (Wailing Caverns: the Disciple of Naralex). `kLastActionType` is now `kGossip`. The protocol stays `"20"`, as for `kSkillUp`:
+  a core that does not know the action refuses it (`kLastActionType`), and the pipeline builds the core and the modules together.
+
 ## SDK package 0.23.0 (2026-10-29): protocol 20 (bot damage log)
 
 - Tier 2 layout 22: `BotSnapshot` gains the last hits the bot took, `damage_hits[]` (up to `kMaxDamageHits` = 8, oldest first, `damage_hit_count` of
