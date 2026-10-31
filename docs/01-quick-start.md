@@ -61,7 +61,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/module.json" FOREVER_MODULE_JSON)
 string(JSON FOREVER_MODULE_VERSION GET "${FOREVER_MODULE_JSON}" version)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/module.json")
 
-# The executable must be named exactly like the module (section 4).
+# The executable must be named exactly like the module (section 5).
 add_executable(hello-bot src/main.cpp)
 target_compile_definitions(hello-bot PRIVATE FOREVER_MODULE_VERSION="${FOREVER_MODULE_VERSION}")
 target_link_libraries(hello-bot PRIVATE forever_module_sdk Threads::Threads)
