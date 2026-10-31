@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
 // Tier 2 shared-memory layout (per-tick bot-AI/combat decision loop).

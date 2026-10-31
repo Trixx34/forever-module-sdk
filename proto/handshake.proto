@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // proto2 on purpose: core bundles protobuf 2.6.1, which only parses proto2 (no proto3, no map<>).
 // See doc/module-system/03-phase1-protocol-design.md. Field numbers and wire encoding are unchanged
 // from the proto3 draft. The protocol version is kProtocolVersion in include/forever_module/protocol_version.h.

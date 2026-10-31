@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // proto2 for protobuf 2.6.1 compatibility in core (see handshake.proto).
 syntax = "proto2";
 package forever_module;

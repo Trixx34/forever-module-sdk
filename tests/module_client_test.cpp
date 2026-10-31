@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // ModuleClient without a core: the Tier 2 convenience methods refuse what they cannot send, and tier2_error() says why.
 
 #include "forever_module/module_client.h"

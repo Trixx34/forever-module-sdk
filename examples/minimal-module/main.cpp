@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Smallest possible module using forever_module_sdk: connects to core, handshakes, and logs when the
 // world starts. It is the fork point for the core repo's "Hello Module" walkthrough. This example
 // only uses Tier 1 for simplicity; see tier2_session.h and ModuleClient's bot-action convenience

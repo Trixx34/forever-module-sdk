@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 #include "forever_module/module_client.h"
 
 #include "forever_module/protocol_version.h"

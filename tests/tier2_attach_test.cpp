@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Tier 2 region, module side: this test plays the core (creates the region with the shared layout header,
 // publishes a snapshot), then checks Tier2Session::Attach and ReadLatestSnapshot against it.
 

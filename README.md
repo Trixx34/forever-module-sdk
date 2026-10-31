@@ -161,7 +161,10 @@ CHANGELOG.md              Protocol, layout and additive changes, newest first
 
 ## License and contributing
 
-There is no license file in this repository (the earlier README said "TBD"), so none is granted yet; ask the owner before reusing the code outside the
-project. Work on a branch other than `main` and `test` and open a pull request: in this project a push to either of those branches moves a product head
+The SDK is licensed under the GNU General Public License, version 2 or (at your option) any later version (`GPL-2.0-or-later`, see `LICENSE`). This matches the
+Forever core, a fork of TrinityCore, which is GPL-2.0 and carries a copy of the SDK's layout header. In practice a module that links the SDK or uses its headers is a
+combined work and must be offered under the GPL as well; keep that in mind before publishing or distributing a module. Source files carry an SPDX identifier.
+
+Work on a branch other than `main` and `test` and open a pull request: in this project a push to either of those branches moves a product head
 and starts the build and deploy pipelines. A change that alters the protocol or the layout has to be made in the SDK and the core together, with a
 `CHANGELOG.md` entry and the version bumps described above.

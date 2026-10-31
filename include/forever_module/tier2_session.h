@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
 // Tier2Session -- the module side of the Tier 2 shared-memory region. See doc/module-system/03-phase1-protocol-design.md

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Tier 1 round-trip test: a fake core on a Unix socket drives ModuleClient through the real wire
 // protocol (length-prefixed Envelope frames). Covers accept + events + heartbeat + core Shutdown,
 // protocol rejection, and Shutdown() called from another thread.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
 // ModuleClient -- the Tier 1 client surface a module author actually writes against.
