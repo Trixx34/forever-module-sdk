@@ -20,6 +20,9 @@
 #endif
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX // windows.h would otherwise define min/max macros that break std::max
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
