@@ -21,6 +21,9 @@
 #endif
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX // windows.h would otherwise define min/max macros that break std::max
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -59,12 +62,22 @@ bool StartSockets()
 // level/name/data/size are each templated on the protocol, as that concept requires.
 class ReceiveTimeoutOption
 {
+#ifdef _WIN32
+    using Value = DWORD;
+#else
+    using Value = timeval;
+#endif
+
 public:
     explicit ReceiveTimeoutOption(std::chrono::milliseconds timeout)
     {
         auto const millis = timeout.count();
+#ifdef _WIN32
+        value_ = static_cast<DWORD>(millis); // Winsock takes SO_RCVTIMEO as a DWORD in milliseconds, not a timeval
+#else
         value_.tv_sec = static_cast<decltype(value_.tv_sec)>(millis / 1000);
         value_.tv_usec = static_cast<decltype(value_.tv_usec)>((millis % 1000) * 1000);
+#endif
     }
 
     template <typename Protocol>
@@ -80,7 +93,7 @@ public:
     }
 
     template <typename Protocol>
-    const timeval* data(const Protocol&) const
+    const Value* data(const Protocol&) const
     {
         return &value_;
     }
@@ -92,7 +105,7 @@ public:
     }
 
 private:
-    timeval value_{};
+    Value value_{};
 };
 
 // The quest operation sits in the top byte of BotAction::spell_id, so a quest id must fit in the low 24 bits.
@@ -929,6 +942,12 @@ bool WaitReadable(local::stream_protocol::socket& socket, std::chrono::milliseco
 {
     // Boost removed wait(wait_type, duration, error_code); poll(2) on the native descriptor is what it
     // did internally. UntilNextTimer caps the wait at an hour, so the timeout always fits in an int.
+#ifdef _WIN32
+    WSAPOLLFD descriptor{};
+    descriptor.fd = socket.native_handle();
+    descriptor.events = POLLRDNORM;
+    return ::WSAPoll(&descriptor, 1, static_cast<INT>(timeout.count())) != 0;
+#else
     pollfd descriptor{};
     descriptor.fd = static_cast<int>(socket.native_handle());
     descriptor.events = POLLIN;
@@ -936,6 +955,7 @@ bool WaitReadable(local::stream_protocol::socket& socket, std::chrono::milliseco
     // poll returns 0 only when nothing became readable before the timeout. Any other outcome -- readable,
     // hung up, or a failed poll -- means proceed to read, which reports the real failure.
     return ::poll(&descriptor, 1, static_cast<int>(timeout.count())) != 0;
+#endif
 }
 
 } // namespace
