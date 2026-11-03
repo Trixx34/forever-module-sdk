@@ -8,7 +8,9 @@ namespace forever_module {
 // Only bump this on breaking changes to the Tier 1 message schema or the Tier 2 shared-memory layout.
 // Bump history: 20 -> 21 adds EmoteAction (ActionRequest fields 27 and 28, with LfgJoinAction), SpeakKind kParty/kGuild, the core-to-module
 // GuildMemberLevelEvent and LfgQueueEvent, and ActionType kEmote/kLfgJoin; all additive, but the core and the SDK move together to "21".
-inline constexpr char const* kProtocolVersion = "21";
+// Bump history: 21 -> 22 adds the core-to-module GroupInviteDeclinedEvent (EventNotify field 22, hook GroupScript.OnInviteDeclined) and
+// the Tier 2 layout 23 (NearbyUnit item_level and shared_objective, BotSnapshot in_capital and guild_guid).
+inline constexpr char const* kProtocolVersion = "22";
 
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire

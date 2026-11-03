@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: protocol 22, group-invite-declined event, layout 23
+
+- Protocol `"21"` -> `"22"`; layout `23`. Event `GroupInviteDeclinedEvent group_invite_declined = 22` (`inviter_guid`, `decliner_guid`),
+  hook `GroupScript.OnInviteDeclined`.
+- Layout 23: `NearbyUnit` gains `item_level` (a player's best equipped item level, 0 for a creature) and `shared_objective` (1 when the player is on an
+  active quest the bot is on too). `BotSnapshot` gains `in_capital` (the bot's zone allows the Trade channel), `guild_guid` (0 with no guild) and `item_level` (the bot's best equipped item level).
+
 ## Unreleased: protocol 21, emotes, LFG join, party/guild chat, guild-level and LFG-queue events (SDK 0.25.0)
 
 - Protocol `"20"` -> `"21"`; the layout stays `22`. All additive: `EmoteAction emote = 27` (`EmoteKind` kSalute/kApplaud/kCheer/kWave/kBow, `target_guid`, `bot_guid = 3`),

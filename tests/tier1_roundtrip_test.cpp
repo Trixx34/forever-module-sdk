@@ -1344,7 +1344,7 @@ Failures RunProtocol21Scenario()
     boost::asio::io_context io;
     stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
 
-    EXPECT_IN(clientFails, std::string(kProtocolVersion) == "21");
+    EXPECT_IN(clientFails, std::string(kProtocolVersion) == "22");
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kEmote) == 30);
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kLfgJoin) == 31);
     EXPECT_IN(clientFails, ActionType::kLastActionType == ActionType::kLfgJoin);
@@ -1435,6 +1435,12 @@ Failures RunProtocol21Scenario()
         lfg->mutable_lfg_queue()->add_open_roles(6);
         lfg->mutable_lfg_queue()->set_queued_players(3);
         EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        EventNotify* declined = out.mutable_event_notify();
+        declined->set_hook_name("GroupScript.OnInviteDeclined");
+        declined->mutable_group_invite_declined()->set_inviter_guid(11);
+        declined->mutable_group_invite_declined()->set_decliner_guid(12);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
 
         out.Clear();
         out.mutable_shutdown()->set_reason("test");
@@ -1447,11 +1453,11 @@ Failures RunProtocol21Scenario()
     ModuleManifest manifest;
     manifest.module_name = "p21-module";
     manifest.module_version = "0.0.1";
-    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate"};
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined"};
     manifest.heartbeat_interval = 20ms;
     ModuleClient client(manifest);
     int replies = 0;
-    bool gotLevel = false, gotLfg = false;
+    bool gotLevel = false, gotLfg = false, gotDeclined = false;
     client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
     {
         auto count = [&](ActionReply const& r) { if (r.success()) ++replies; };
@@ -1471,6 +1477,11 @@ Failures RunProtocol21Scenario()
         gotLfg = e.map_id() == 33 && e.queued_seconds() == 90 && e.open_roles_size() == 2 && e.open_roles(0) == 1 && e.open_roles(1) == 6 &&
                  e.queued_players() == 3;
     });
+    client.OnNotify("GroupScript.OnInviteDeclined", [&](EventNotify const& n)
+    {
+        GroupInviteDeclinedEvent const& e = n.group_invite_declined();
+        gotDeclined = e.inviter_guid() == 11 && e.decliner_guid() == 12;
+    });
     EXPECT_IN(clientFails, client.Connect(path));
     EXPECT_IN(clientFails, client.Handshake(2000ms));
     client.Run();
@@ -1478,6 +1489,7 @@ Failures RunProtocol21Scenario()
 
     EXPECT_IN(clientFails, replies == 4);
     EXPECT_IN(clientFails, gotLevel);
+    EXPECT_IN(clientFails, gotDeclined);
     EXPECT_IN(clientFails, gotLfg);
 
     Failures all = clientFails;

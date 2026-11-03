@@ -25,7 +25,7 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 22;
+inline constexpr std::uint32_t kTier2LayoutVersion = 23;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -47,6 +47,10 @@ struct NearbyUnit {
     // auras the core chose to report on it. Mask bit assignment is core-defined and fixed per layout.
     std::uint32_t aura_count = 0;
     std::uint32_t aura_mask = 0;
+    // Layout 23: a player unit's best equipped item level (0 for a creature, or unknown), and 1 when the player is on an active quest the bot
+    // is on too (shared_objective; the bot's quest log is in its snapshot). Both are 0 for a unit that is not a player.
+    std::uint32_t item_level = 0;
+    std::uint8_t shared_objective = 0;
 };
 
 // What happened to a bot's action in the last action set the core applied. Reported in the next snapshot.
@@ -298,6 +302,12 @@ struct BotSnapshot {
     std::uint32_t damage_sequence = 0;
     std::uint8_t damage_hit_count = 0;
     DamageHit damage_hits[kMaxDamageHits] = {};
+    // Layout 23: 1 when the bot stands in a capital city (its zone allows the Trade channel, AreaFlags::AllowTradeChannel), so city inspection
+    // can run. guild_guid is the guild the bot is in (0 with no guild).
+    std::uint8_t in_capital = 0;
+    std::uint64_t guild_guid = 0;
+    // Layout 23: the best equipped item level of the bot (CityInspect compares it with the player's; 0 unknown).
+    std::uint32_t item_level = 0;
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
