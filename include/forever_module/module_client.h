@@ -143,6 +143,7 @@ public:
         kBuyout = 2,
         kList = 3,
         kCancel = 4,
+        kListCommodity = 5, // a stack of goods at bid copper per unit (the core's commodity auction)
     };
     std::uint64_t AuctionHouse(AuctionHouseOp op, std::uint64_t auctioneerGuid,
                                std::uint64_t itemGuid = 0, std::uint64_t auctionGuid = 0,
@@ -174,12 +175,23 @@ public:
                                               ActionCallback onReply = nullptr);
 
     // A bot speaks: /say (kSay) or a whisper to playerGuid (kWhisper). text is 1 to 255 bytes. The core sends it as the bot's own chat line.
+    // kChannel (use BotSpeakChannel) says it on a public channel of the bot's zone; the core refuses it with "not in channel" when the bot
+    // cannot join that channel where it stands.
     enum class SpeakKind : std::uint32_t {
         kSay = 0,
         kWhisper = 1,
+        kChannel = 2,
     };
     std::uint64_t BotSpeak(std::uint64_t botGuid, SpeakKind kind, std::uint64_t playerGuid, std::string const& text,
                            ActionCallback onReply = nullptr);
+
+    // The public channel a bot says a line on (SpeakKind::kChannel).
+    enum class SpeakChannel : std::uint32_t {
+        kGeneral = 0,
+        kTrade = 1,
+    };
+    std::uint64_t BotSpeakChannel(std::uint64_t botGuid, SpeakChannel channel, std::string const& text,
+                                  ActionCallback onReply = nullptr);
 
     // The trade window of a bot. kBegin accepts the trade a player asked for; kSetItem / kClearItem work on a trade slot (0 to 5);
     // kSetGold offers copper; kAccept presses Trade; kCancel closes the window; kListBags replies with the items the bot can trade

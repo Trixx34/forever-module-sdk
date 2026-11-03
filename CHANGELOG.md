@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased: channel say and commodity listing (no protocol change)
+
+- `BotSpeakAction` gains `kind` 2 (channel say) and `channel` (field 5: 0 General, 1 Trade). The core says the line on the bot's zone channel, joining it
+  first; it refuses with "not in channel" when the bot cannot join. `ModuleClient::BotSpeakChannel` sends it. A core without the field refuses kind 2 as an
+  unknown speak kind.
+- `AuctionHouseAction` op `kListCommodity` (5): list a stack of `count` stackable goods at `bid` copper per unit, for `buyout` copper per unit (the core's
+  commodity auction). `ModuleClient::AuctionHouse` / `AuctionHouseForBot` take it as `AuctionHouseOp::kListCommodity`. A core without it refuses op 5.
+
+## Unreleased: kRespecTalents (no protocol change)
+
+- `ActionType::kRespecTalents` (29): unlearn the bot's spent talent points, pay the core's talent reset cost, and spend the points again by the profile for
+  `spell_id` (a `TalentSpec`, 0 none) and `dest_x` (talent role 1 tank, 2 healer, 3 dps, 0 none). Refused in combat, dead, below level 10, short of gold, or
+  unless the core's `Bot.Talents.Respec` is on (default off). `kLastActionType` is now `kRespecTalents`. The protocol stays `"20"`, as for `kGossip`: a core that
+  does not know the action refuses it, and the pipeline builds the core and the modules together.
+
 ## SDK package 0.24.0 (2026-10-30): kGossip (no protocol change)
 
 - `ActionType::kGossip` (28): talk to a friendly creature and pick one of its gossip options. `spell_id` is the creature's entry (the nearest live one within 30 yards),

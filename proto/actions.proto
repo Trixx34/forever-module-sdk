@@ -48,6 +48,7 @@ message AuctionHouseAction {
     kBuyout = 2;   // buy out auction_guid at buyout copper
     kList = 3;     // list item_guid (from bags) as a stack of count at bid/buyout copper
     kCancel = 4;   // cancel auction_guid, returning the item to the player's bags
+    kListCommodity = 5; // list a stack of count units (stackable goods) at bid copper per unit, for buyout copper per unit: the core's commodity auction
   }
   optional AHOp op = 1;
   optional uint64 auctioneer_guid = 2;  // the auctioneer NPC
@@ -87,9 +88,10 @@ message SendPlayerMessageAction {
 // text is 1 to 255 bytes. Used for short acknowledgements of a command and for a bot's trade whispers.
 message BotSpeakAction {
   optional uint64 bot_guid = 1;     // raw character GUID counter from BotSnapshot.guid
-  optional uint32 kind = 2;         // 0 say, 1 whisper
+  optional uint32 kind = 2;         // 0 say, 1 whisper, 2 channel say (the General or Trade channel of the bot's zone)
   optional uint64 player_guid = 3;  // whisper only: raw character GUID counter of the player to whisper
   optional string text = 4;
+  optional uint32 channel = 5;      // kind 2 only: 0 General, 1 Trade (additive; a core without it refuses kind 2)
 }
 
 // One item a bot could put in a trade. item_guid is what BotTradeAction kSetItem takes.

@@ -540,6 +540,17 @@ std::uint64_t ModuleClient::BotSpeak(std::uint64_t botGuid, SpeakKind kind, std:
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BotSpeakChannel(std::uint64_t botGuid, SpeakChannel channel, std::string const& text, ActionCallback onReply)
+{
+    ActionRequest request;
+    BotSpeakAction* speak = request.mutable_bot_speak();
+    speak->set_bot_guid(botGuid);
+    speak->set_kind(static_cast<std::uint32_t>(SpeakKind::kChannel));
+    speak->set_channel(static_cast<std::uint32_t>(channel));
+    speak->set_text(text);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::SpendBotTalents(std::uint64_t botGuid, TalentRole role, ActionCallback onReply)
 {
     return SpendBotTalents(botGuid, role, TalentSpec::kNone, std::move(onReply));
