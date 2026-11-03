@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased: duels, battlegrounds, guild, gift mail (no protocol change)
+
+- Four new `ActionRequest` payloads, all additive (field 22, `SpendBotTalentsAction`, is unchanged; nothing is renumbered). A core that does not know
+  a field refuses the request, so each feature stays off until the core ships; the protocol stays `"20"` and the layout `22`, as for `kGossip` and
+  `kRespecTalents` (the bump rule is about the fixed shared-memory shapes).
+  - `DuelAction duel = 23`: `DuelOp` `kChallenge` / `kAccept` / `kDecline`, `bot_guid`, `player_guid`. `ModuleClient::BotDuel`.
+  - `BattlegroundAction battleground = 24`: `BattlegroundOp` `kQueue` / `kLeaveQueue` / `kLeave`, `bot_guid`, `battleground_id` (BattlemasterList id).
+    `ModuleClient::BotBattleground`.
+  - `GuildAction guild = 25`: `GuildOp` `kAccept` / `kDecline` / `kLeave`, `bot_guid`. `ModuleClient::BotGuild`.
+  - `GiftMailAction gift_mail = 26`: `bot_guid`, `recipient_guid`, `item_guid` (0 for money only), `count`, `copper`, `subject`. `ModuleClient::BotGiftMail`.
+- Replies are the existing `ActionCallback` / `ActionReply` (`success`, `reason`). The core re-checks every precondition when the action runs.
+
 ## Unreleased: channel say and commodity listing (no protocol change)
 
 - `BotSpeakAction` gains `kind` 2 (channel say) and `channel` (field 5: 0 General, 1 Trade). The core says the line on the bot's zone channel, joining it

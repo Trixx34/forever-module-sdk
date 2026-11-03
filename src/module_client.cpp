@@ -580,6 +580,49 @@ std::uint64_t ModuleClient::BotTrade(std::uint64_t botGuid, BotTradeOp op, std::
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BotDuel(std::uint64_t botGuid, DuelOp op, std::uint64_t playerGuid, ActionCallback onReply)
+{
+    ActionRequest request;
+    DuelAction* duel = request.mutable_duel();
+    duel->set_op(static_cast<DuelAction_DuelOp>(static_cast<std::uint32_t>(op)));
+    duel->set_bot_guid(botGuid);
+    duel->set_player_guid(playerGuid);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::BotBattleground(std::uint64_t botGuid, BattlegroundOp op, std::uint32_t battlegroundId, ActionCallback onReply)
+{
+    ActionRequest request;
+    BattlegroundAction* battleground = request.mutable_battleground();
+    battleground->set_op(static_cast<BattlegroundAction_BattlegroundOp>(static_cast<std::uint32_t>(op)));
+    battleground->set_bot_guid(botGuid);
+    battleground->set_battleground_id(battlegroundId);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::BotGuild(std::uint64_t botGuid, GuildOp op, ActionCallback onReply)
+{
+    ActionRequest request;
+    GuildAction* guild = request.mutable_guild();
+    guild->set_op(static_cast<GuildAction_GuildOp>(static_cast<std::uint32_t>(op)));
+    guild->set_bot_guid(botGuid);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::BotGiftMail(std::uint64_t botGuid, std::uint64_t recipientGuid, std::uint64_t itemGuid, std::uint32_t count,
+                                        std::uint64_t copper, std::string const& subject, ActionCallback onReply)
+{
+    ActionRequest request;
+    GiftMailAction* gift = request.mutable_gift_mail();
+    gift->set_bot_guid(botGuid);
+    gift->set_recipient_guid(recipientGuid);
+    gift->set_item_guid(itemGuid);
+    gift->set_count(count);
+    gift->set_copper(copper);
+    gift->set_subject(subject);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::StoreGet(std::string const& key, ActionCallback onReply)
 {
     ActionRequest request;

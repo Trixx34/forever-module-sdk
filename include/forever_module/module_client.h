@@ -208,6 +208,41 @@ public:
     std::uint64_t BotTrade(std::uint64_t botGuid, BotTradeOp op, std::uint32_t slot = 0, std::uint64_t itemGuid = 0,
                            std::uint64_t copper = 0, ActionCallback onReply = nullptr);
 
+    // A duel for a controlled bot. kChallenge asks playerGuid to a duel; kAccept accepts the duel playerGuid asked for; kDecline cancels or declines it.
+    // The core runs the duel code a player uses (range, line of sight, zone, "already dueling") and re-checks it when the action runs; the reply says
+    // false with a reason when it refuses. A core older than this action refuses the request. Added after protocol 20 (additive, like kGossip).
+    enum class DuelOp : std::uint32_t {
+        kChallenge = 0,
+        kAccept = 1,
+        kDecline = 2,
+    };
+    std::uint64_t BotDuel(std::uint64_t botGuid, DuelOp op, std::uint64_t playerGuid, ActionCallback onReply = nullptr);
+
+    // A battleground queue for a controlled bot. kQueue queues for battlegroundId (a BattlemasterList id: 1 Alterac Valley, 2 Warsong Gulch, 3 Arathi
+    // Basin, ...); kLeaveQueue leaves that queue; kLeave leaves the battleground the bot is in (battlegroundId is then ignored). The core runs the
+    // battlemaster code a player uses (level, faction, deserter, already queued) and re-checks when the action runs. Additive after protocol 20.
+    enum class BattlegroundOp : std::uint32_t {
+        kQueue = 0,
+        kLeaveQueue = 1,
+        kLeave = 2,
+    };
+    std::uint64_t BotBattleground(std::uint64_t botGuid, BattlegroundOp op, std::uint32_t battlegroundId = 0, ActionCallback onReply = nullptr);
+
+    // A guild answer for a controlled bot: kAccept or kDecline the pending invitation, or kLeave the guild it is in. The core runs the guild handlers a
+    // player uses and checks at execution time that an invitation is pending (or that the bot is in a guild it may leave). Additive after protocol 20.
+    enum class GuildOp : std::uint32_t {
+        kAccept = 0,
+        kDecline = 1,
+        kLeave = 2,
+    };
+    std::uint64_t BotGuild(std::uint64_t botGuid, GuildOp op, ActionCallback onReply = nullptr);
+
+    // A gift by mail from a controlled bot to recipientGuid: itemGuid (0 for money only) in a stack of `count`, and `copper`, with a subject of 1 to 64
+    // bytes. The core re-checks that the bot still has the item (not bound, not a quest item) and the money, charges the postage a player pays, and
+    // sends the mail like an auction result. Additive after protocol 20.
+    std::uint64_t BotGiftMail(std::uint64_t botGuid, std::uint64_t recipientGuid, std::uint64_t itemGuid, std::uint32_t count, std::uint64_t copper,
+                              std::string const& subject, ActionCallback onReply = nullptr);
+
     // The role a bot plays, for its talent profile: kNone, kTank, kHealer or kDps. The core spends the bot's talent points by the profile for
     // its (class, role) as far as its level allows; the reply says false with a reason when it could not (in combat, below level 10).
     enum class TalentRole : std::uint32_t {

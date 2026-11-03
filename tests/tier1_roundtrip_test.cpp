@@ -1211,6 +1211,129 @@ Failures RunTalentsScenario()
     return all;
 }
 
+// Duel, battleground, guild and gift mail actions (additive after protocol 20): each payload reaches the core with its fields, and a reply comes back.
+Failures RunSocialActionsScenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("social");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(16);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+        auto reply = [&](std::uint64_t id, bool success)
+        {
+            out.Clear();
+            out.set_message_id(id);
+            ActionReply* r = out.mutable_action_reply();
+            r->set_message_id(id);
+            r->set_success(success);
+            if (!success)
+                r->set_reason("refused");
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        };
+
+        bool got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_duel());
+            DuelAction const& duel = in.action_request().duel();
+            EXPECT_IN(coreFails, duel.op() == DuelAction::kAccept && duel.bot_guid() == 42 && duel.player_guid() == 7);
+            reply(in.action_request().message_id(), true);
+        }
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_battleground());
+            BattlegroundAction const& bg = in.action_request().battleground();
+            EXPECT_IN(coreFails, bg.op() == BattlegroundAction::kQueue && bg.bot_guid() == 43 && bg.battleground_id() == 2);
+            reply(in.action_request().message_id(), true);
+        }
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_guild());
+            GuildAction const& guild = in.action_request().guild();
+            EXPECT_IN(coreFails, guild.op() == GuildAction::kDecline && guild.bot_guid() == 44);
+            reply(in.action_request().message_id(), false);
+        }
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_gift_mail());
+            GiftMailAction const& gift = in.action_request().gift_mail();
+            EXPECT_IN(coreFails, gift.bot_guid() == 45 && gift.recipient_guid() == 9 && gift.item_guid() == 1234 && gift.count() == 5 &&
+                                     gift.copper() == 100 && gift.subject() == "A gift");
+            reply(in.action_request().message_id(), true);
+        }
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "social-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    bool gotDuel = false, gotBg = false, gotGuild = false, gotGift = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        client.BotDuel(42, ModuleClient::DuelOp::kAccept, 7, [&](ActionReply const& r) { gotDuel = r.success(); });
+        client.BotBattleground(43, ModuleClient::BattlegroundOp::kQueue, 2, [&](ActionReply const& r) { gotBg = r.success(); });
+        client.BotGuild(44, ModuleClient::GuildOp::kDecline, [&](ActionReply const& r) { gotGuild = !r.success() && r.reason() == "refused"; });
+        client.BotGiftMail(45, 9, 1234, 5, 100, "A gift", [&](ActionReply const& r) { gotGift = r.success(); });
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, gotDuel);
+    EXPECT_IN(clientFails, gotBg);
+    EXPECT_IN(clientFails, gotGuild);
+    EXPECT_IN(clientFails, gotGift);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 // Auction browse by filter (protocol 19): the filter fields reach the core, the listings come back in the reply with the new fields, and a
 // buyout the core did not place answers success = false with a reason.
 Failures RunAuctionBuyScenario()
@@ -1361,6 +1484,7 @@ int main()
     Report("vendor/AH purchases carry the bot identity and browse events correlate", RunEconomyActorScenario(), failedScenarios);
     Report("bot speech and bot trade: whisper, list bags, set item, trade event", RunBotTradeScenario(), failedScenarios);
     Report("bot talents: role only, role and spec, refusal", RunTalentsScenario(), failedScenarios);
+    Report("bot duel, battleground, guild, gift mail", RunSocialActionsScenario(), failedScenarios);
     Report("auction browse by filter: listings in the reply, a refused buyout", RunAuctionBuyScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

@@ -152,6 +152,56 @@ message StoreListAction {
   optional string prefix = 1;        // keys starting with this; empty lists all
 }
 
+// A bot takes part in a duel (additive after protocol 20: a core without field 23 refuses the request). The core runs the real duel code, so the
+// range, line-of-sight, zone and "already dueling" checks are a player's, and re-checks them when the action runs.
+message DuelAction {
+  enum DuelOp {
+    kChallenge = 0;  // the bot challenges player_guid to a duel
+    kAccept = 1;     // the bot accepts the duel player_guid asked for
+    kDecline = 2;    // the bot declines (cancels) the duel with player_guid
+  }
+  optional DuelOp op = 1;
+  optional uint64 bot_guid = 2;     // raw character GUID counter from BotSnapshot.guid
+  optional uint64 player_guid = 3;  // the other duelist: raw character GUID counter
+}
+
+// A bot's battleground queue (additive after protocol 20: a core without field 24 refuses the request). The core runs the battlemaster / queue code
+// a player uses, so level, faction, deserter and "already queued" checks apply, and re-checks them when the action runs.
+message BattlegroundAction {
+  enum BattlegroundOp {
+    kQueue = 0;       // queue for battleground_id (solo)
+    kLeaveQueue = 1;  // leave the queue for battleground_id
+    kLeave = 2;       // leave the battleground the bot is in
+  }
+  optional BattlegroundOp op = 1;
+  optional uint64 bot_guid = 2;        // raw character GUID counter from BotSnapshot.guid
+  optional uint32 battleground_id = 3; // BattlemasterList id (1 Alterac Valley, 2 Warsong Gulch, 3 Arathi Basin, ...)
+}
+
+// A bot answers a guild invitation or leaves its guild (additive after protocol 20: a core without field 25 refuses the request). The core runs the
+// guild handlers a player uses and re-checks that an invitation is pending at execution time.
+message GuildAction {
+  enum GuildOp {
+    kAccept = 0;   // accept the pending guild invitation
+    kDecline = 1;  // decline the pending guild invitation
+    kLeave = 2;    // leave the guild the bot is in
+  }
+  optional GuildOp op = 1;
+  optional uint64 bot_guid = 2;  // raw character GUID counter from BotSnapshot.guid
+}
+
+// A bot sends a gift by mail (additive after protocol 20: a core without field 26 refuses the request). The core re-checks that the bot still has the
+// item (a stack of count, not bound, not a quest item) and the copper, charges the postage a player pays, and sends the mail. item_guid 0 sends
+// money only. subject is 1 to 64 bytes.
+message GiftMailAction {
+  optional uint64 bot_guid = 1;        // raw character GUID counter from BotSnapshot.guid
+  optional uint64 recipient_guid = 2;  // raw character GUID counter of the receiver
+  optional uint64 item_guid = 3;       // 0 for money only
+  optional uint32 count = 4;           // units of the item to send
+  optional uint64 copper = 5;          // copper to attach, 0 for none
+  optional string subject = 6;
+}
+
 message ActionRequest {
   optional uint64 message_id = 1; // correlates with the ActionReply carrying the same id
   oneof action_payload {
@@ -168,6 +218,10 @@ message ActionRequest {
     BotSpeakAction bot_speak = 20;
     BotTradeAction bot_trade = 21;
     SpendBotTalentsAction spend_bot_talents = 22;
+    DuelAction duel = 23;                  // additive after protocol 20
+    BattlegroundAction battleground = 24;  // additive after protocol 20
+    GuildAction guild = 25;                // additive after protocol 20
+    GiftMailAction gift_mail = 26;         // additive after protocol 20
   }
 }
 

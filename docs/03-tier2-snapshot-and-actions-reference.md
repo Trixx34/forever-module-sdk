@@ -8,7 +8,7 @@ Conventions:
 
 - A **unit reference** (`BotAction::target_guid`, `NearbyUnit::guid`, and every `*_guid` that is a unit in the snapshot) is a 64-bit value built by `MakeUnitRef`
   (below). A **raw character guid counter** is the plain number `BotSnapshot::guid` and `BotAction::bot_guid` use for a bot; Tier 1 calls that name a bot
-  (`BuyItemForBot`, `SpendBotTalents`, `BotSpeak`, `BotTrade`) take the same raw counter.
+  (`BuyItemForBot`, `SpendBotTalents`, `BotSpeak`, `BotTrade`, `BotDuel`, `BotBattleground`, `BotGuild`, `BotGiftMail`) take the same raw counter.
 - Distances are in yards, positions in the world's coordinates (`pos_x/y/z`, `orientation` in radians as the core gives it), times in milliseconds, money
   in copper.
 - "Layout N" says when a field appeared. A field marked 0 / valid 0 means "none".
@@ -262,6 +262,10 @@ The core runs them on the world thread, 32 per tick.
 | `AuctionHouse...`, `AuctionHouseForBot`, `AuctionBrowseByFilterForBot` | Bid, buyout, list, cancel, browse (by item, or by filter since protocol 19). | `listings`, `item_entry`, `auction_guid` |
 | `BotSpeak(bot, kind, player, text)` | A bot says (kSay) or whispers (kWhisper) 1 to 255 bytes. | |
 | `BotTrade(bot, op, slot, item, copper)` | Drives a bot's trade window (kBegin, kSetItem, kClearItem, kSetGold, kAccept, kCancel, kListBags). | `bag_items` |
+| `BotDuel(bot, op, player)` | A bot challenges (kChallenge), accepts (kAccept) or declines (kDecline) a duel with `player`. The core runs a player's duel code. Additive after protocol 20. | |
+| `BotBattleground(bot, op, battlegroundId)` | A bot queues (kQueue), leaves the queue (kLeaveQueue) or leaves the battleground (kLeave); `battlegroundId` is a BattlemasterList id. Additive after protocol 20. | |
+| `BotGuild(bot, op)` | A bot accepts (kAccept) or declines (kDecline) a pending guild invitation, or leaves its guild (kLeave). Additive after protocol 20. | |
+| `BotGiftMail(bot, recipient, item, count, copper, subject)` | A bot mails an item (0 = none) and/or copper to a character; the core re-checks the item (not bound, not a quest item) and money. Additive after protocol 20. | |
 | `SpendBotTalents(bot, role[, spec])` | Spends the bot's talent points by profile (role kTank/kHealer/kDps; spec from `talent_spec.h`, 1 to 28). Out of combat, level 10 or more. | |
 | `StoreGet/Set/Delete/List` | The module store; see [docs/02](02-architecture-and-lifecycle.md). | `found`, `value`, `keys` |
 
