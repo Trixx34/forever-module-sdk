@@ -1334,6 +1334,157 @@ Failures RunSocialActionsScenario()
     return all;
 }
 
+// Protocol 21: emote, LFG join, party/guild speak, and the two new core events.
+Failures RunProtocol21Scenario()
+{
+    Failures clientFails;
+    Failures coreFails;
+    std::string const path = SocketPath("p21");
+    ::unlink(path.c_str());
+    boost::asio::io_context io;
+    stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
+
+    EXPECT_IN(clientFails, std::string(kProtocolVersion) == "21");
+    EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kEmote) == 30);
+    EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kLfgJoin) == 31);
+    EXPECT_IN(clientFails, ActionType::kLastActionType == ActionType::kLfgJoin);
+    EXPECT_IN(clientFails, static_cast<std::uint32_t>(ModuleClient::SpeakKind::kParty) == 3);
+    EXPECT_IN(clientFails, static_cast<std::uint32_t>(ModuleClient::SpeakKind::kGuild) == 4);
+
+    std::thread core([&]
+    {
+        stream_protocol::socket socket(acceptor.get_executor());
+        acceptor.accept(socket);
+        Envelope in;
+        Envelope out;
+        EXPECT_IN(coreFails, ReadEnvelope(socket, in));
+        EXPECT_IN(coreFails, in.payload_case() == Envelope::kHandshakeRequest);
+        out.mutable_handshake_response()->set_accepted(true);
+        out.mutable_handshake_response()->set_module_id(17);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_module_config();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        out.mutable_event_notify()->set_hook_name("WorldScript.OnStartup");
+        out.mutable_event_notify()->mutable_world_startup();
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        auto readAction = [&](Envelope& envelope)
+        {
+            while (ReadEnvelope(socket, envelope))
+                if (envelope.payload_case() == Envelope::kActionRequest)
+                    return true;
+            return false;
+        };
+        auto reply = [&](std::uint64_t id)
+        {
+            out.Clear();
+            out.set_message_id(id);
+            out.mutable_action_reply()->set_message_id(id);
+            out.mutable_action_reply()->set_success(true);
+            EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        };
+
+        bool got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_emote());
+            EmoteAction const& emote = in.action_request().emote();
+            EXPECT_IN(coreFails, emote.bot_guid() == 42 && emote.kind() == EmoteAction::kBow && emote.target_guid() == 7);
+            reply(in.action_request().message_id());
+        }
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_lfg_join());
+            LfgJoinAction const& join = in.action_request().lfg_join();
+            EXPECT_IN(coreFails, join.bot_guid() == 43 && join.role() == 4 && join.map_id() == 33);
+            reply(in.action_request().message_id());
+        }
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_bot_speak() && in.action_request().bot_speak().kind() == 3);
+            reply(in.action_request().message_id());
+        }
+        got = readAction(in);
+        EXPECT_IN(coreFails, got);
+        if (got)
+        {
+            EXPECT_IN(coreFails, in.action_request().has_bot_speak() && in.action_request().bot_speak().kind() == 4);
+            reply(in.action_request().message_id());
+        }
+
+        out.Clear();
+        EventNotify* level = out.mutable_event_notify();
+        level->set_hook_name("GuildScript.OnMemberLevel");
+        level->mutable_guild_member_level()->set_guild_guid(5);
+        level->mutable_guild_member_level()->set_member_guid(9);
+        level->mutable_guild_member_level()->set_new_level(20);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        EventNotify* lfg = out.mutable_event_notify();
+        lfg->set_hook_name("LfgScript.OnQueueUpdate");
+        lfg->mutable_lfg_queue()->set_map_id(33);
+        lfg->mutable_lfg_queue()->set_queued_seconds(90);
+        lfg->mutable_lfg_queue()->add_open_roles(1);
+        lfg->mutable_lfg_queue()->add_open_roles(6);
+        lfg->mutable_lfg_queue()->set_queued_players(3);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+
+        out.Clear();
+        out.mutable_shutdown()->set_reason("test");
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        boost::system::error_code ec;
+        socket.shutdown(stream_protocol::socket::shutdown_both, ec);
+        socket.close(ec);
+    });
+
+    ModuleManifest manifest;
+    manifest.module_name = "p21-module";
+    manifest.module_version = "0.0.1";
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate"};
+    manifest.heartbeat_interval = 20ms;
+    ModuleClient client(manifest);
+    int replies = 0;
+    bool gotLevel = false, gotLfg = false;
+    client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
+    {
+        auto count = [&](ActionReply const& r) { if (r.success()) ++replies; };
+        client.BotEmote(42, EmoteAction::kBow, 7, count);
+        client.BotLfgJoin(43, 4, 33, count);
+        client.BotSpeak(44, ModuleClient::SpeakKind::kParty, 0, "hi party", count);
+        client.BotSpeak(44, ModuleClient::SpeakKind::kGuild, 0, "hi guild", count);
+    });
+    client.OnNotify("GuildScript.OnMemberLevel", [&](EventNotify const& n)
+    {
+        GuildMemberLevelEvent const& e = n.guild_member_level();
+        gotLevel = e.guild_guid() == 5 && e.member_guid() == 9 && e.new_level() == 20;
+    });
+    client.OnNotify("LfgScript.OnQueueUpdate", [&](EventNotify const& n)
+    {
+        LfgQueueEvent const& e = n.lfg_queue();
+        gotLfg = e.map_id() == 33 && e.queued_seconds() == 90 && e.open_roles_size() == 2 && e.open_roles(0) == 1 && e.open_roles(1) == 6 &&
+                 e.queued_players() == 3;
+    });
+    EXPECT_IN(clientFails, client.Connect(path));
+    EXPECT_IN(clientFails, client.Handshake(2000ms));
+    client.Run();
+    core.join();
+
+    EXPECT_IN(clientFails, replies == 4);
+    EXPECT_IN(clientFails, gotLevel);
+    EXPECT_IN(clientFails, gotLfg);
+
+    Failures all = clientFails;
+    all.insert(all.end(), coreFails.begin(), coreFails.end());
+    return all;
+}
+
 // Auction browse by filter (protocol 19): the filter fields reach the core, the listings come back in the reply with the new fields, and a
 // buyout the core did not place answers success = false with a reason.
 Failures RunAuctionBuyScenario()
@@ -1485,6 +1636,7 @@ int main()
     Report("bot speech and bot trade: whisper, list bags, set item, trade event", RunBotTradeScenario(), failedScenarios);
     Report("bot talents: role only, role and spec, refusal", RunTalentsScenario(), failedScenarios);
     Report("bot duel, battleground, guild, gift mail", RunSocialActionsScenario(), failedScenarios);
+    Report("protocol 21: emote, lfg join, party/guild speak, guild level and lfg queue events", RunProtocol21Scenario(), failedScenarios);
     Report("auction browse by filter: listings in the reply, a refused buyout", RunAuctionBuyScenario(), failedScenarios);
     return failedScenarios == 0 ? 0 : 1;
 }

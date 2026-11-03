@@ -410,7 +410,9 @@ enum class ActionType : std::uint32_t {
                          // respec"), nothing is unlearned, and nothing is paid. Refused in combat and dead, below level 10, and unless the core's
                          // Bot.Talents.Respec is on (default off). kApplied when the reset is done; the reason is empty when the points were spent again,
                          // else it says the spend was refused and the points stay unspent (SpendBotTalents spends them later, never a second reset).
-    kLastActionType = kRespecTalents, // the highest valid value; PublishActions refuses anything above it
+    kEmote = 30,           // SDK 0.25 (protocol 21): a bot emote. The Tier 1 request is ModuleClient::BotEmote (EmoteAction); this value reserves the number for core.
+    kLfgJoin = 31,         // SDK 0.25 (protocol 21): a bot joins the dungeon finder. The Tier 1 request is ModuleClient::BotLfgJoin (LfgJoinAction).
+    kLastActionType = kLfgJoin, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.

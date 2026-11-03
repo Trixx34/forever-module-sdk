@@ -590,6 +590,26 @@ std::uint64_t ModuleClient::BotDuel(std::uint64_t botGuid, DuelOp op, std::uint6
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BotEmote(std::uint64_t botGuid, EmoteAction::EmoteKind kind, std::uint64_t targetGuid, ActionCallback onReply)
+{
+    ActionRequest request;
+    EmoteAction* emote = request.mutable_emote();
+    emote->set_kind(kind);
+    emote->set_bot_guid(botGuid);
+    emote->set_target_guid(targetGuid);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::BotLfgJoin(std::uint64_t botGuid, std::uint32_t role, std::uint32_t mapId, ActionCallback onReply)
+{
+    ActionRequest request;
+    LfgJoinAction* join = request.mutable_lfg_join();
+    join->set_bot_guid(botGuid);
+    join->set_role(role);
+    join->set_map_id(mapId);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::BotBattleground(std::uint64_t botGuid, BattlegroundOp op, std::uint32_t battlegroundId, ActionCallback onReply)
 {
     ActionRequest request;
