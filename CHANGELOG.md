@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: protocol 21, emotes, LFG join, party/guild chat, guild-level and LFG-queue events (SDK 0.25.0)
+
+- Protocol `"20"` -> `"21"`; the layout stays `22`. All additive: `EmoteAction emote = 27` (`EmoteKind` kSalute/kApplaud/kCheer/kWave/kBow, `target_guid`, `bot_guid = 3`),
+  `LfgJoinAction lfg_join = 28` (`bot_guid`, `role` 1/2/4, `map_id`), `ModuleClient::BotEmote` and `BotLfgJoin`.
+- `ActionType` `kEmote = 30`, `kLfgJoin = 31` (`kLastActionType = kLfgJoin`). `SpeakKind` `kParty = 3`, `kGuild = 4` (`BotSpeak`).
+- Events (`EventNotify`): `GuildMemberLevelEvent guild_member_level = 20`, `LfgQueueEvent lfg_queue = 21`.
+
+
 ## Unreleased: duels, battlegrounds, guild, gift mail (no protocol change)
 
 - Four new `ActionRequest` payloads, all additive (field 22, `SpendBotTalentsAction`, is unchanged; nothing is renumbered). A core that does not know

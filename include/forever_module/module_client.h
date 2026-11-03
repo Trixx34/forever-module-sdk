@@ -181,6 +181,8 @@ public:
         kSay = 0,
         kWhisper = 1,
         kChannel = 2,
+        kParty = 3, // protocol 21: party chat (the bot must be in a party)
+        kGuild = 4, // protocol 21: guild chat (the bot must be in a guild)
     };
     std::uint64_t BotSpeak(std::uint64_t botGuid, SpeakKind kind, std::uint64_t playerGuid, std::string const& text,
                            ActionCallback onReply = nullptr);
@@ -242,6 +244,16 @@ public:
     // sends the mail like an auction result. Additive after protocol 20.
     std::uint64_t BotGiftMail(std::uint64_t botGuid, std::uint64_t recipientGuid, std::uint64_t itemGuid, std::uint32_t count, std::uint64_t copper,
                               std::string const& subject, ActionCallback onReply = nullptr);
+
+    // A bot emote (protocol 21): kSalute, kApplaud, kCheer, kWave or kBow (EmoteAction::EmoteKind), facing targetGuid (0 = no target).
+    std::uint64_t BotEmote(std::uint64_t botGuid, EmoteAction::EmoteKind kind, std::uint64_t targetGuid = 0, ActionCallback onReply = nullptr);
+
+    // A bot joins the dungeon finder for mapId in one role (protocol 21): 1 tank, 2 healer, 4 dps. The core re-checks level, group and
+    // deserter state when the action runs; the reply says false with a reason when it refuses.
+    std::uint64_t BotLfgJoin(std::uint64_t botGuid, std::uint32_t role, std::uint32_t mapId, ActionCallback onReply = nullptr);
+
+    // Events from the core (protocol 21), delivered through OnNotify with EventNotify::guild_member_level() (hook "GuildScript.OnMemberLevel",
+    // GuildMemberLevelEvent) and EventNotify::lfg_queue() (hook "LfgScript.OnQueueUpdate", LfgQueueEvent), declared in manifest.tier1_hooks.
 
     // The role a bot plays, for its talent profile: kNone, kTank, kHealer or kDps. The core spends the bot's talent points by the profile for
     // its (class, role) as far as its level allows; the reply says false with a reason when it could not (in combat, below level 10).

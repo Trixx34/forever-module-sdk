@@ -88,7 +88,7 @@ message SendPlayerMessageAction {
 // text is 1 to 255 bytes. Used for short acknowledgements of a command and for a bot's trade whispers.
 message BotSpeakAction {
   optional uint64 bot_guid = 1;     // raw character GUID counter from BotSnapshot.guid
-  optional uint32 kind = 2;         // 0 say, 1 whisper, 2 channel say (the General or Trade channel of the bot's zone)
+  optional uint32 kind = 2;         // 0 say, 1 whisper, 2 channel say (the General or Trade channel of the bot's zone), 3 party chat, 4 guild chat (3 and 4: protocol 21)
   optional uint64 player_guid = 3;  // whisper only: raw character GUID counter of the player to whisper
   optional string text = 4;
   optional uint32 channel = 5;      // kind 2 only: 0 General, 1 Trade (additive; a core without it refuses kind 2)
@@ -202,6 +202,27 @@ message GiftMailAction {
   optional string subject = 6;
 }
 
+// A bot emote (protocol 21). target_guid is the raw GUID counter of the unit the emote faces; 0 = no target.
+message EmoteAction {
+  enum EmoteKind {
+    kSalute = 0;
+    kApplaud = 1;
+    kCheer = 2;
+    kWave = 3;
+    kBow = 4;
+  }
+  optional EmoteKind kind = 1;
+  optional uint64 target_guid = 2;
+  optional uint64 bot_guid = 3;     // raw character GUID counter of the emoting bot (added by the SDK: the action must name its bot)
+}
+
+// A bot joins the dungeon finder queue for map_id in one role (protocol 21). role: 1 tank, 2 healer, 4 dps.
+message LfgJoinAction {
+  optional uint64 bot_guid = 1;  // raw character GUID counter from BotSnapshot.guid
+  optional uint32 role = 2;      // 1 tank, 2 healer, 4 dps
+  optional uint32 map_id = 3;
+}
+
 message ActionRequest {
   optional uint64 message_id = 1; // correlates with the ActionReply carrying the same id
   oneof action_payload {
@@ -222,6 +243,8 @@ message ActionRequest {
     BattlegroundAction battleground = 24;  // additive after protocol 20
     GuildAction guild = 25;                // additive after protocol 20
     GiftMailAction gift_mail = 26;         // additive after protocol 20
+    EmoteAction emote = 27;                // protocol 21
+    LfgJoinAction lfg_join = 28;           // protocol 21
   }
 }
 
