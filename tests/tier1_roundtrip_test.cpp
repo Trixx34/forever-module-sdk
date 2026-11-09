@@ -1344,7 +1344,7 @@ Failures RunProtocol21Scenario()
     boost::asio::io_context io;
     stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
 
-    EXPECT_IN(clientFails, std::string(kProtocolVersion) == "22");
+    EXPECT_IN(clientFails, std::string(kProtocolVersion) == "24");
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kEmote) == 30);
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kLfgJoin) == 31);
     EXPECT_IN(clientFails, ActionType::kLastActionType == ActionType::kLfgJoin);
