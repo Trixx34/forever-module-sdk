@@ -629,6 +629,26 @@ std::uint64_t ModuleClient::BotGuild(std::uint64_t botGuid, GuildOp op, ActionCa
     return RequestAction(std::move(request), std::move(onReply));
 }
 
+std::uint64_t ModuleClient::BotGuildCreate(std::uint64_t botGuid, std::string const& name, ActionCallback onReply)
+{
+    ActionRequest request;
+    GuildAction* guild = request.mutable_guild();
+    guild->set_op(GuildAction_GuildOp_kCreate);
+    guild->set_bot_guid(botGuid);
+    guild->set_name(name);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
+std::uint64_t ModuleClient::BotGuildInvite(std::uint64_t botGuid, std::uint64_t playerGuid, ActionCallback onReply)
+{
+    ActionRequest request;
+    GuildAction* guild = request.mutable_guild();
+    guild->set_op(GuildAction_GuildOp_kInvite);
+    guild->set_bot_guid(botGuid);
+    guild->set_player_guid(playerGuid);
+    return RequestAction(std::move(request), std::move(onReply));
+}
+
 std::uint64_t ModuleClient::BotGiftMail(std::uint64_t botGuid, std::uint64_t recipientGuid, std::uint64_t itemGuid, std::uint32_t count,
                                         std::uint64_t copper, std::string const& subject, ActionCallback onReply)
 {

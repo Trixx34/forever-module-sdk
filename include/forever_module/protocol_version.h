@@ -10,13 +10,16 @@ namespace forever_module {
 // GuildMemberLevelEvent and LfgQueueEvent, and ActionType kEmote/kLfgJoin; all additive, but the core and the SDK move together to "21".
 // Bump history: 21 -> 22 adds the core-to-module GroupInviteDeclinedEvent (EventNotify field 22, hook GroupScript.OnInviteDeclined) and
 // the Tier 2 layout 23 (NearbyUnit item_level and shared_objective, BotSnapshot in_capital and guild_guid).
-inline constexpr char const* kProtocolVersion = "22";
+// Bump history: 22 -> 23 adds GuildAction kCreate (SocialOp 3) and GuildAction.name (field 3): the bot creates a guild.
+// 23 -> 24 adds GuildAction kInvite (SocialOp 4) and GuildAction.player_guid (field 4): the bot invites a character to its guild.
+// Both are additive, but the core and the SDK move together, so an older core refuses the handshake instead of mis-reading the request.
+inline constexpr char const* kProtocolVersion = "24";
 
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire
 // contract. See doc/module-system/11-sdk-scope.md for the full versioning split rationale.
 // Pre-1.0 scheme (forever-ops docs/96-versioning.md): 0.MINOR.PATCH, MINOR for a protocol or layout change or a new capability, PATCH for fixes. The
 // same number is in CMakeLists.txt (project VERSION); the tier1_roundtrip test fails when the two differ.
-inline constexpr char const* kSdkPackageVersion = "0.25.0";
+inline constexpr char const* kSdkPackageVersion = "0.26.0";
 
 } // namespace forever_module

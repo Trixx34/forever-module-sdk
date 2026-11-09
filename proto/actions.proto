@@ -185,9 +185,13 @@ message GuildAction {
     kAccept = 0;   // accept the pending guild invitation
     kDecline = 1;  // decline the pending guild invitation
     kLeave = 2;    // leave the guild the bot is in
+    kCreate = 3;   // create a guild named `name` with the bot as its master (protocol 23)
+    kInvite = 4;   // invite player_guid to the guild the bot is in; the bot needs the invite right (protocol 24)
   }
   optional GuildOp op = 1;
-  optional uint64 bot_guid = 2;  // raw character GUID counter from BotSnapshot.guid
+  optional uint64 bot_guid = 2;     // raw character GUID counter from BotSnapshot.guid
+  optional string name = 3;         // kCreate only: 2 to 24 bytes, no guild of that name yet (protocol 23)
+  optional uint64 player_guid = 4;  // kInvite only: the invitee's raw character GUID counter, bot or player, online (protocol 24)
 }
 
 // A bot sends a gift by mail (additive after protocol 20: a core without field 26 refuses the request). The core re-checks that the bot still has the

@@ -236,8 +236,15 @@ public:
         kAccept = 0,
         kDecline = 1,
         kLeave = 2,
+        kCreate = 3,   // protocol 23: the bot becomes the master of a new guild named by BotGuildCreate
+        kInvite = 4,   // protocol 24: the bot invites player_guid to its guild (BotGuildInvite)
     };
     std::uint64_t BotGuild(std::uint64_t botGuid, GuildOp op, ActionCallback onReply = nullptr);
+    // Protocol 23: the controlled bot, in no guild, creates a guild called name (2 to 24 bytes). The core refuses a name in use or a bot already in a guild.
+    std::uint64_t BotGuildCreate(std::uint64_t botGuid, std::string const& name, ActionCallback onReply = nullptr);
+    // Protocol 24: the controlled bot, in a guild with the invite right, invites the online character playerGuid. The core answers a refusal (rank,
+    // faction, the invitee in a guild or already invited) as a failed action; success means the invitation is pending on the invitee.
+    std::uint64_t BotGuildInvite(std::uint64_t botGuid, std::uint64_t playerGuid, ActionCallback onReply = nullptr);
 
     // A gift by mail from a controlled bot to recipientGuid: itemGuid (0 for money only) in a stack of `count`, and `copper`, with a subject of 1 to 64
     // bytes. The core re-checks that the bot still has the item (not bound, not a quest item) and the money, charges the postage a player pays, and
