@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased: protocol 26, the party view and enemy telegraphs, layout 25 (SDK 0.27.0)
+
+- Protocol `"25"` -> `"26"`; layout `25`, base `25` (`kTier2LayoutBase`, the growth rule in `tier2_layout.h`: from here on fields are appended, a module reads a
+  newer region through the section table with the core's strides, and `Tier2Session::Attach` refuses only an older core or a newer one whose base it does not meet).
+  The Tier 1 messages do not change; the core and every module must be rebuilt (the Tier 1 handshake still refuses a protocol mismatch).
+- `PartyView` (320 bytes, one per group, `Tier2PartyViewSlots(max_bots)` slots) and `PartyMember` (176 bytes, one pool of `Tier2PartyMemberSlots(max_bots)`):
+  members with class, role, subgroup, bot flag, health, power, life state, position, map, victim, cast, `debuffs[6]` (`PartyDebuff`, dispel type), pet,
+  transport and attacker count; per group the leader, main tank and assist, `raid_marks[8]`, `loose_mobs[8]` (`LooseMob`: a creature on a non-tank, with how
+  long) and the engaged count. `BotSnapshot::party_view_index` / `party_member_index` (`kNoPartyView` for none). `WorldTickSnapshotView` gains `party_views`,
+  `party_members`, `PartyViewOf`, `MembersOf`, `MemberOf`, `TelegraphsOf`, `ProbesOf`. Filled only with the core's `Bot.Snapshot.PartyView` (loose mobs and
+  attackers with `Bot.Snapshot.PartyThreat`).
+- `kMaxGroundEffects` 4 -> 8 (in place: the one break of this layout). `Telegraph[4]` with `telegraph_count`: a hostile cast in progress that hits a circle
+  or a cone (`Bot.Snapshot.Telegraphs`). `NearbyUnit::aggro_radius` (`Bot.Snapshot.AggroRadius`). `BotSnapshot::role_hint`.
+- Actions: `kStopCast = 33` (`Bot.Actions.StopCast`), `kProbePoint = 34` with `ProbeResult[4]`, `probe_count`, `probe_sequence` and `ProbeFlag`
+  (`Bot.Actions.Probe`, `Bot.Probe.PerTick`), `kTransport = 32` reserved (`Bot.Actions.Transport`, refused until implemented). `kLastActionType = kProbePoint`.
+- `Tier2RegionHeader` (56 -> 304 bytes) gains `layout_base`, the party slots, the region geometry (`header_bytes`, `snapshot_bytes`, `action_offset`,
+  `action_bytes`, `action_header_bytes`, `action_stride`) and `sections[8]` (`Tier2Section`, `Tier2SectionKind`); `Tier2DescribeRegion` fills them.
+  `WorldTickSnapshotHeader` (16 -> 24) gains `party_view_count` and `party_member_count`. Sizes: `BotSnapshot` 1416 -> 1856, `NearbyUnit` 128 -> 136.
+- Design: forever-ops `docs/122-layout-25-design.md`.
+
 ## Unreleased: protocol 25, the bot's perception, layout 24
 
 - Protocol `"24"` -> `"25"`; layout `24`. The Tier 1 messages do not change; the core and every module must be rebuilt.

@@ -15,13 +15,16 @@ namespace forever_module {
 // Both are additive, but the core and the SDK move together, so an older core refuses the handshake instead of mis-reading the request.
 // 24 -> 25 is the Tier 2 layout 24 (the bot's perception: NearbyUnit victim/threat/cast/type/flags/orientation/raid mark/own debuffs, BotSnapshot gcd_remaining_ms,
 // movement_flags, transport_guid, banker, target auras, an action result ring, 16 cooldown slots). The Tier 1 messages do not change.
-inline constexpr char const* kProtocolVersion = "25";
+// 25 -> 26 is the Tier 2 layout 25 (the party view and enemy telegraphs: one shared PartyView per group with a PartyMember pool, 8 ground effects,
+// Telegraph[4], ProbeResult[4] and kProbePoint, kStopCast, kTransport (reserved), NearbyUnit aggro_radius, the section table and the growth rule
+// in Tier2RegionHeader). The Tier 1 messages do not change.
+inline constexpr char const* kProtocolVersion = "26";
 
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire
 // contract. See doc/module-system/11-sdk-scope.md for the full versioning split rationale.
 // Pre-1.0 scheme (forever-ops docs/96-versioning.md): 0.MINOR.PATCH, MINOR for a protocol or layout change or a new capability, PATCH for fixes. The
 // same number is in CMakeLists.txt (project VERSION); the tier1_roundtrip test fails when the two differ.
-inline constexpr char const* kSdkPackageVersion = "0.26.0";
+inline constexpr char const* kSdkPackageVersion = "0.27.0";
 
 } // namespace forever_module

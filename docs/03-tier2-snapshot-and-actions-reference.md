@@ -24,8 +24,8 @@ forever_module::WorldTickSnapshotView const& view = session->ReadLatestSnapshot(
 // view.NearbyOf(i)   std::span<NearbyUnit const> for view.bots[i], up to bots[i].nearby_count entries
 ```
 
-`ReadLatestSnapshot()` copies the whole published snapshot (a vector of `BotSnapshot`, 1136 bytes each at layout 22, plus `max_nearby_units` `NearbyUnit`s (48 bytes) per bot
-slot). It is non-blocking and returns the previous complete snapshot if the core was writing during all three attempts; before the first complete copy the
+`ReadLatestSnapshot()` copies the whole published snapshot (a vector of `BotSnapshot`, 1856 bytes each at layout 25, plus `max_nearby_units` `NearbyUnit`s (136 bytes) per bot
+slot, plus the party views and the party member pool the core filled this tick). It is non-blocking and returns the previous complete snapshot if the core was writing during all three attempts; before the first complete copy the
 result is empty with `tick_number` 0, and `HasSnapshot()` is `false`.
 
 ### BotSnapshot
@@ -77,8 +77,36 @@ result is empty with `tick_number` 0, and `HasSnapshot()` is `false`.
 | `taxi_master_*`, `in_flight` | `uint8`, `float`, `uint64` | Layout 17. Nearest flight master the bot can walk to, and whether the bot is on a flight (it takes no orders but a `kTaxi` that ends it; it lands by itself). |
 | `profession_skill[2]`, `profession_value[2]`, `profession_max[2]` | `uint16` | Layout 18. The two primary profession skill lines the core assigned (0: none, an alt, or `Bot.Professions.Enabled` off), and the skill value and maximum in each (0 until learned). |
 | `auctioneer_valid`, `auctioneer_x/y/z` | `uint8`, `float` | Layout 20. Nearest auctioneer the bot's faction may use, on its map. `auctioneer_guid` is the unit reference an `AuctionHouse` call names. |
-| `ground_effect_count`, `ground_effects[kMaxGroundEffects]` | `uint8`, `GroundEffect[4]` | Layout 21. The first `ground_effect_count` entries. 0 when none, **or when the core's `Bot.Snapshot.GroundEffects` is off (default 0)**. |
+| `ground_effect_count`, `ground_effects[kMaxGroundEffects]` | `uint8`, `GroundEffect[8]` | Layout 21. The first `ground_effect_count` entries. 0 when none, **or when the core's `Bot.Snapshot.GroundEffects` is off (default 0)**. Layout 25: 8 slots (was 4). |
 | `damage_sequence`, `damage_hit_count`, `damage_hits[kMaxDamageHits]` | `uint32`, `uint8`, `DamageHit[8]` | Layout 22. The last hits the bot took, oldest first (the core keeps the last 8). |
+| `party_view_index`, `party_member_index` | `uint32` | Layout 25. The bot's group view in `WorldTickSnapshotView::party_views` and its own entry in `party_members`; `kNoPartyView` when it has no group or the core's `Bot.Snapshot.PartyView` is off (default 0). Use `PartyViewOf()` / `MemberOf()`. |
+| `telegraph_count`, `telegraphs[kMaxTelegraphs]` | `uint8`, `Telegraph[4]` | Layout 25. Hostile casts in progress near the bot that hit a circle or a cone, soonest first; **only with the core's `Bot.Snapshot.Telegraphs` (default 0)**. Use `TelegraphsOf()`. |
+| `probe_count`, `probe_sequence`, `probes[kMaxProbeResults]` | `uint8`, `uint32`, `ProbeResult[4]` | Layout 25. The answers to the bot's `kProbePoint` actions, oldest first; `probe_sequence` is the newest answer's sequence (0 before the first). Use `ProbesOf()`. |
+| `role_hint` | `uint8` | Layout 25. The role the module last gave the core for the bot's talents (0 none, 1 tank, 2 healer, 3 damage), so a restarted module finds the roles again. |
+
+### PartyView and PartyMember (layout 25)
+
+One `PartyView` per group, shared by every bot of the group, and one pool of `PartyMember` entries for the whole snapshot (`view.member_first`, `view.member_count`
+into `party_members`; `WorldTickSnapshotView::MembersOf(view)` gives the span). Built by the core only with `Bot.Snapshot.PartyView = 1`; a group in combat or in
+an instance is rebuilt every tick, an idle one one tick in `Bot.Snapshot.PartyViewIdleTicks` (`generation` tells a reused view). The region has
+`Tier2PartyViewSlots(max_bots)` = `max_bots / 2 + 1` view slots and `Tier2PartyMemberSlots(max_bots)` = `2 * max_bots` member slots; a group beyond them is not built.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `group_id`, `leader_ref` | `uint64` | The group's guid counter (0 = unused slot) and the leader's unit reference. |
+| `main_tank_ref`, `main_assist_ref` | `uint64` | The member flagged main tank (else the first member with a tank role, else 0) and main assist. |
+| `raid_marks[kMaxRaidMarks]` | `uint64[8]` | The unit raid target icon *i* + 1 is on (0 none): skull is `raid_marks[7]`. |
+| `member_first`, `member_count` | `uint32` | The members in the pool, in the group's slot order (up to `kMaxPartyMembers` = 40). |
+| `generation` | `uint32` | Counts the rebuilds of this view. |
+| `is_raid`, `in_combat` | `uint8` | A raid group; any online member in combat. |
+| `engaged_count`, `loose_count`, `loose_mobs[kMaxLooseMobs]` | `uint8`, `uint8`, `LooseMob[8]` | **Only with `Bot.Snapshot.PartyThreat`.** Creatures attacking any member; the first `loose_count` of the creatures on a member who is not a tank (`unit_ref`, `victim_ref`, `since_ms`: mobs on healers first, then the newest). A small `since_ms` is a fresh aggro loss. |
+
+`PartyMember`: `guid` (unit reference), `class_id`, `role` (`PartyRole` bits: tank 1, healer 2, damage 4, from the LFG roles or the main tank flag; for a bot
+without either, the role its module gave the core), `subgroup`, `is_bot`, `member_flags` (`PartyMemberFlag`: assistant 1, main tank 2, main assist 4, leader 8),
+`online` (1 when in the world: only then the rest is filled), `pos_x/y/z`, `map_id`, `health`, `max_health`, `power`, `max_power`, `power_type`, `life_state`
+(0 alive, 1 dead, 2 ghost), `rez_pending`, `in_combat`, `victim_ref`, `casting_spell`, `casting_target`, `cast_remaining_ms`, `pet_guid`, `pet_health`,
+`pet_max_health`, `transport_entry`, `attacker_count` (`Bot.Snapshot.PartyThreat`), `debuff_count` and `debuffs[kMaxPartyDebuffs]` (`PartyDebuff`: `spell_id`,
+`remaining_ms`, `dispel_type` 0 none, 1 magic, 2 curse, 3 disease, 4 poison, `stacks`; the dispellable ones first, then the longest remaining first).
 
 ### NearbyUnit
 
@@ -92,6 +120,8 @@ result is empty with `tick_number` 0, and `HasSnapshot()` is `false`.
 | `elite` | `uint8` | 1 for an elite creature or boss. |
 | `casting` | `uint8` | 1 while the unit casts a spell. |
 | `aura_count`, `aura_mask` | `uint32` | Layout 13. Number of auras the core reports, and a coarse summary mask ("has a DOT", "has a poison"). The bit assignment is **core-defined and not documented in the SDK header**; the per-unit aura array does not exist, only the mask. |
+| `victim_ref` ... `my_debuffs[4]` | see the header | Layout 24: who the unit fights, what it casts, what it is, its state flags, facing, raid mark and the bot's own debuffs on it (`tier2_layout.h`). |
+| `aggro_radius` | `float` | Layout 25. How close the bot may come before a living creature that can be fought attacks on its own, in yards (0 for a player, a dead or friendly unit, or with the core's `Bot.Snapshot.AggroRadius` off). |
 
 How many are listed per bot is the negotiated `max_nearby_units` (default limit 16), chosen by the core (the header does not say in what order, so do not rely on one). The list may be several ticks old (see the nearby refresh note in [docs/02](02-architecture-and-lifecycle.md)).
 
@@ -102,7 +132,9 @@ How many are listed per bot is the negotiated `max_nearby_units` (default limit 
 | `SpellCooldown` | `spell_id`, `remaining_ms` (`uint32`) | `spell_id` 0 = unused slot. Up to `kMaxTrackedCooldowns` = 8 per bot. |
 | `AuraEntry` | `spell_id`, `remaining_ms`, `stacks` (`uint32`) | `spell_id` 0 = unused slot. Up to `kMaxAuras` = 16. `remaining_ms` for an aura with no duration is a large sentinel, "core's choice, e.g. 0xFFFFFFFF". `stacks` is 1 when it does not stack. |
 | `QuestEntry` | `quest_id` (`uint32`, 0 = unused), `status` (`uint8`: 1 incomplete, 2 complete and ready to hand in, 3 failed), `counts[kMaxQuestObjectives]` (`uint16[4]`) | `counts[i]` is the progress of objective *i* (a kill or item count), 0 for unused objectives. Up to `kMaxQuestLog` = 8 quests. |
-| `GroundEffect` | `spell_id` (0 = unused), `x`, `y`, `z`, `radius`, `kind`, `hostile` | A dynamic object (a spell's persistent area: Flamestrike, Blizzard) or an area trigger within `kGroundEffectRangeYards` = 30 of the bot, the one the bot stands in or nearest first. `radius` yards (0 = not known). `kind`: 1 dynamic object, 2 area trigger. `hostile` 1 when the caster is hostile to the bot. Up to `kMaxGroundEffects` = 4. |
+| `GroundEffect` | `spell_id` (0 = unused), `x`, `y`, `z`, `radius`, `kind`, `hostile` | A dynamic object (a spell's persistent area: Flamestrike, Blizzard) or an area trigger within `kGroundEffectRangeYards` = 30 of the bot, the one the bot stands in or nearest first. `radius` yards (0 = not known). `kind`: 1 dynamic object, 2 area trigger. `hostile` 1 when the caster is hostile to the bot. Up to `kMaxGroundEffects` = 8 (layout 25; 4 before). |
+| `Telegraph` | `caster_ref` (`uint64`), `spell_id` (0 = unused), `cast_remaining_ms`, `x`, `y`, `z`, `radius`, `cone_angle`, `facing`, `kind`, `interruptible` | Layout 25. A hostile cast in progress that hits an area. `kind` 1: a circle of `radius` around (x, y, z), the cast's destination; 2: a cone from the caster at (x, y, z), `radius` long, `cone_angle` degrees wide (0 = the spell system's default 90) around `facing`; 3: a circle of `radius` around the caster. `interruptible` as `NearbyUnit::cast_interruptible`. Up to `kMaxTelegraphs` = 4, soonest to land first. |
+| `ProbeResult` | `probe_id`, `flags` (`ProbeFlag`), `x`, `y`, `z`, `ground_z`, `path_yards`, `sequence` (0 = unused) | Layout 25. The answer to a `kProbePoint`: `probe_id` is the action's `spell_id` echoed back. `flags`: `kProbeReachable` (a full route), `kProbePartialRoute` (a route that stops short; `path_yards` is what exists), `kProbeLosToTarget` with `kProbeLosKnown` (the point is in line of sight of the unit `target_guid` named), `kProbeInLiquid`, `kProbeGroundKnown` (`ground_z` is set). Up to `kMaxProbeResults` = 4, oldest first. |
 | `DamageHit` | `source_guid` (`uint64`), `spell_id`, `amount`, `sequence` (`uint32`) | `source_guid` is the attacker's unit reference (0 for an environmental source, or one that cannot be packed). `spell_id` 0 = melee or auto attack. `amount` as the core applied it. `sequence` counts every hit on the bot since it came online. Up to `kMaxDamageHits` = 8, oldest first. |
 
 **Reading new damage.** Keep, per bot, the highest `sequence` you have processed; the hits with a higher `sequence` are new. `damage_sequence` is the newest

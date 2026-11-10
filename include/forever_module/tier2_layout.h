@@ -25,7 +25,19 @@ namespace forever_module {
 
 // Explicit layout version, checked by the module when it attaches to the region. Lets a mismatch
 // be detected from the shared memory itself, independent of the Tier 1 handshake.
-inline constexpr std::uint32_t kTier2LayoutVersion = 24;
+inline constexpr std::uint32_t kTier2LayoutVersion = 25;
+
+// Layout 25, the growth rule. From this layout on, a change to the shared shapes is one of two kinds:
+//   - an APPEND: new fields at the end of a struct (its old fields keep their offsets), a new array at the end of the snapshot
+//     buffer (a new Tier2Section kind), or new enum values. kTier2LayoutVersion goes up; kTier2LayoutBase stays.
+//   - a BREAK: a field moved, removed, widened, or an array in the middle of a struct resized. Both numbers go up to the new layout.
+// The core writes both into Tier2RegionHeader. A module built against layout M reads a region of layout N when
+// kTier2LayoutBase(N) <= M <= N: it reads each section with the element stride the section table gives (the core's sizeof), so
+// the tail it does not know is skipped, and a section it does not know is ignored. A region older than the module (N < M)
+// is refused: the module would read fields the core never wrote. kProtocolVersion is still bumped with every layout change
+// (the Tier 1 handshake refuses a mismatch; relaxing that is a separate decision). The procedure for adding a field is in
+// forever-ops docs/122-layout-25-design.md.
+inline constexpr std::uint32_t kTier2LayoutBase = 25;
 
 // Small, fixed cap -- see doc/module-system/07-phase5-reference-module-design.md, this value is
 // still open pending real measurement from a spell-casting test module.
@@ -92,6 +104,10 @@ struct NearbyUnit {
     std::uint8_t creature_rank = 0;       // 0 normal, 1 elite, 2 rare elite, 3 boss, 4 rare
     std::uint8_t raid_mark = 0;           // the raid target icon on it, 1..8, 0 for none
     OwnDebuff my_debuffs[kMaxOwnDebuffs] = {};
+    // Layout 25: how close the bot may come before a living creature that can be fought attacks on its own (Creature::GetAggroRange for this bot,
+    // in yards; 0 for a player, a dead or friendly unit, or when Bot.Snapshot.AggroRadius is off in the core). Pull spots and patrol waits.
+    float aggro_radius = 0.0f;
+    std::uint32_t reserved25 = 0;
 };
 
 // What happened to a bot's action in the last action set the core applied. Reported in the next snapshot.
@@ -118,8 +134,8 @@ enum class BotActionStatus : std::uint8_t {
 // Layout 21: one harmful-looking thing on the ground near a bot: a dynamic object (a spell's persistent area, such as Flamestrike or Blizzard) or an area trigger. The
 // core lists the ones within kGroundEffectRangeYards of the bot, the one the bot stands in or nearest to first, up to kMaxGroundEffects. radius is the effect's radius in
 // yards (0: not known). kind: 1 dynamic object, 2 area trigger. hostile is 1 when the effect's caster is hostile to the bot (a creature's spell, not a party member's).
-// spell_id 0 marks an unused slot. Only filled when Bot.Snapshot.GroundEffects is on in the core.
-inline constexpr std::size_t kMaxGroundEffects = 4;
+// spell_id 0 marks an unused slot. Only filled when Bot.Snapshot.GroundEffects is on in the core. Layout 25: 8 slots (was 4).
+inline constexpr std::size_t kMaxGroundEffects = 8;
 inline constexpr float kGroundEffectRangeYards = 30.0f;
 struct GroundEffect {
     std::uint32_t spell_id = 0;
@@ -180,6 +196,178 @@ struct ActionResult {
     std::uint16_t reserved = 0;
     std::uint32_t spell_id = 0;
     std::uint32_t sequence = 0;
+};
+
+// Layout 25: an enemy telegraph: a hostile cast in progress, near the bot, whose spell hits an area or a cone, so the bot can step out of it (or kick it)
+// before it lands. The core lists up to kMaxTelegraphs of them per bot, the soonest to land first, taken from the casting units of the bot's nearby list.
+// kind: 1 a circle of `radius` yards around (x, y, z), the cast's destination; 2 a cone from the caster at (x, y, z), `radius` yards long, `cone_angle`
+// degrees wide (the full angle, 0 = the spell system's default of 90) around the caster's `facing`; 3 a circle of `radius` yards around the caster
+// itself. interruptible is the NearbyUnit cast_interruptible of the caster. spell_id 0 marks an unused slot. Only filled when Bot.Snapshot.Telegraphs is
+// on in the core.
+inline constexpr std::size_t kMaxTelegraphs = 4;
+struct Telegraph {
+    std::uint64_t caster_ref = 0;
+    std::uint32_t spell_id = 0;
+    std::uint32_t cast_remaining_ms = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float radius = 0.0f;
+    float cone_angle = 0.0f;
+    float facing = 0.0f;
+    std::uint8_t kind = 0;
+    std::uint8_t interruptible = 0;
+    std::uint16_t reserved = 0;
+    std::uint32_t reserved2 = 0;
+};
+
+// Layout 25: the answer to a kProbePoint action (the position probe service, plan Phase 5.3): what the core knows about a point the module named.
+// probe_id is the action's spell_id (the module's own number for the probe, echoed back); (x, y, z) the point as asked. flags: ProbeFlag bits.
+// ground_z is the ground height under the point (with kProbeGroundKnown); path_yards the length of the route from where the bot stood (with
+// kProbeReachable or kProbePartialRoute). sequence is the action sequence the probe was answered with (0 marks an unused slot). The bot's snapshot
+// keeps the last kMaxProbeResults answers, oldest first (BotSnapshot::probes); probe_sequence is the newest.
+inline constexpr std::size_t kMaxProbeResults = 4;
+enum ProbeFlag : std::uint32_t {
+    kProbeReachable = 1u << 0,      // the navmesh has a full route from the bot to the point
+    kProbePartialRoute = 1u << 1,   // a route exists but stops short of the point (path_yards is the part that exists)
+    kProbeLosToTarget = 1u << 2,    // the point is in line of sight of the unit target_guid named (only with kProbeLosKnown)
+    kProbeLosKnown = 1u << 3,       // a target was named and found, so bit 2 is an answer
+    kProbeInLiquid = 1u << 4,       // the point is in water (or another liquid)
+    kProbeGroundKnown = 1u << 5,    // ground_z is set
+};
+struct ProbeResult {
+    std::uint32_t probe_id = 0;
+    std::uint32_t flags = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float ground_z = 0.0f;
+    float path_yards = 0.0f;
+    std::uint32_t sequence = 0;
+};
+
+// Layout 25: the party view, one block per group shared by every bot of the group (BotSnapshot::party_view_index), not copied into each bot. Its
+// members live in one pool of PartyMember entries for the whole snapshot (PartyView::member_first, member_count). Only built when Bot.Snapshot.PartyView
+// is on in the core; a bot whose group was not built (switch off, or more groups than the region has slots for) has party_view_index == kNoPartyView.
+inline constexpr std::uint32_t kNoPartyView = 0xFFFFFFFFu;
+inline constexpr std::size_t kMaxPartyMembers = 40;   // members listed per view: a raid
+inline constexpr std::size_t kMaxPartyDebuffs = 6;
+inline constexpr std::size_t kMaxLooseMobs = 8;
+inline constexpr std::size_t kMaxRaidMarks = 8;
+
+// A harmful aura on a party member. dispel_type: 0 none, 1 magic, 2 curse, 3 disease, 4 poison (the spell's DispelType); the dispellable ones come first,
+// then the longest remaining first. remaining_ms 0xFFFFFFFF for an aura with no duration. spell_id 0 marks an unused slot.
+struct PartyDebuff {
+    std::uint32_t spell_id = 0;
+    std::uint32_t remaining_ms = 0;
+    std::uint8_t dispel_type = 0;
+    std::uint8_t stacks = 0;
+    std::uint16_t reserved = 0;
+};
+
+// Bits of PartyMember::role: the group's LFG roles, or the main tank flag; for a bot without either, the role its module gave it (SpendBotTalents).
+enum PartyRole : std::uint8_t {
+    kPartyRoleTank = 1u << 0,
+    kPartyRoleHealer = 1u << 1,
+    kPartyRoleDamage = 1u << 2,
+};
+
+// Bits of PartyMember::member_flags: the group's own member flags, plus the leader.
+enum PartyMemberFlag : std::uint8_t {
+    kPartyMemberAssistant = 1u << 0,
+    kPartyMemberMainTank = 1u << 1,
+    kPartyMemberMainAssist = 1u << 2,
+    kPartyMemberLeader = 1u << 3,
+};
+
+// One member of a group, bot or human. guid is the player's unit reference. online is 1 when the player is in the world: only then are the position,
+// health, power, combat, cast, pet, debuff and attacker fields filled (the others stay 0). life_state as BotSnapshot's: 0 alive, 1 dead, 2 ghost.
+// rez_pending 1 when a resurrect offer waits for the player's answer. transport_entry: the entry of the transport the member stands on (0 none),
+// so a bot can ride with its leader. attacker_count: the units attacking the member now (Bot.Snapshot.PartyThreat). debuffs: the first debuff_count
+// of debuffs[]. The pet fields follow BotSnapshot's (pet_guid 0 = none).
+struct PartyMember {
+    std::uint64_t guid = 0;
+    std::uint64_t victim_ref = 0;
+    std::uint64_t casting_target = 0;
+    std::uint64_t pet_guid = 0;
+    float pos_x = 0.0f;
+    float pos_y = 0.0f;
+    float pos_z = 0.0f;
+    std::uint32_t map_id = 0;
+    std::uint32_t health = 0;
+    std::uint32_t max_health = 0;
+    std::uint32_t power = 0;
+    std::uint32_t max_power = 0;
+    std::uint32_t casting_spell = 0;
+    std::uint32_t cast_remaining_ms = 0;
+    std::uint32_t pet_health = 0;
+    std::uint32_t pet_max_health = 0;
+    std::uint32_t transport_entry = 0;
+    std::uint8_t class_id = 0;
+    std::uint8_t role = 0;            // PartyRole bits
+    std::uint8_t subgroup = 0;        // 0..7 in a raid, 0 in a party
+    std::uint8_t is_bot = 0;
+    std::uint8_t power_type = 0;
+    std::uint8_t life_state = 0;
+    std::uint8_t rez_pending = 0;
+    std::uint8_t member_flags = 0;    // PartyMemberFlag bits
+    std::uint8_t online = 0;
+    std::uint8_t in_combat = 0;
+    std::uint8_t attacker_count = 0;
+    std::uint8_t debuff_count = 0;
+    PartyDebuff debuffs[kMaxPartyDebuffs] = {};
+    std::uint32_t reserved[2] = {};
+};
+
+// A creature attacking a member of the group who is not a tank (Bot.Snapshot.PartyThreat): the aggro-loss list. victim_ref is that member; since_ms is
+// how long the creature has been on a non-tank (small = a new loss: the module needs no event ring to see one). Mobs on healers come first, then the
+// newest. unit_ref 0 marks an unused slot.
+struct LooseMob {
+    std::uint64_t unit_ref = 0;
+    std::uint64_t victim_ref = 0;
+    std::uint32_t since_ms = 0;
+    std::uint32_t reserved = 0;
+};
+
+// One group. group_id is the group's guid counter (0 marks an unused slot). main_tank_ref: the member flagged main tank, else the first member with
+// a tank role, else 0; main_assist_ref likewise from the main assist flag. raid_marks[i] is the unit raid target icon i + 1 is on (0 none).
+// engaged_count: the creatures attacking any member (capped at 255); loose_count: the first loose_count entries of loose_mobs[] (both need
+// Bot.Snapshot.PartyThreat). generation counts the rebuilds of this group's view: an idle group is rebuilt one tick in Bot.Snapshot.PartyViewIdleTicks,
+// a group in combat or in an instance every tick, so a module that sees the same generation twice knows the facts are reused.
+struct PartyView {
+    std::uint64_t group_id = 0;
+    std::uint64_t leader_ref = 0;
+    std::uint64_t main_tank_ref = 0;
+    std::uint64_t main_assist_ref = 0;
+    std::uint64_t raid_marks[kMaxRaidMarks] = {};
+    std::uint32_t member_first = 0;
+    std::uint32_t member_count = 0;
+    std::uint32_t generation = 0;
+    std::uint8_t is_raid = 0;
+    std::uint8_t in_combat = 0;
+    std::uint8_t engaged_count = 0;
+    std::uint8_t loose_count = 0;
+    LooseMob loose_mobs[kMaxLooseMobs] = {};
+    std::uint32_t reserved[4] = {};
+};
+
+// Layout 25: the section table in Tier2RegionHeader: where each array of a snapshot buffer lies, with the element stride the core wrote (its sizeof)
+// and the number of slots. offset is from the start of each snapshot buffer. kind 0 marks an unused entry. A module reads the sections it knows by
+// kind and ignores the rest (the growth rule above kTier2LayoutBase).
+inline constexpr std::size_t kMaxTier2Sections = 8;
+enum class Tier2SectionKind : std::uint32_t {
+    kNone = 0,
+    kBots = 1,          // BotSnapshot[max_bots]
+    kNearbyUnits = 2,   // NearbyUnit[max_bots * max_nearby_units]
+    kPartyViews = 3,    // PartyView[max_party_views]
+    kPartyMembers = 4,  // PartyMember[max_party_members]
+};
+struct Tier2Section {
+    std::uint32_t kind = 0;          // Tier2SectionKind
+    std::uint32_t element_size = 0;  // the stride, in bytes
+    std::uint32_t count = 0;         // slots in the section
+    std::uint32_t reserved = 0;
+    std::uint64_t offset = 0;
 };
 
 struct BotSnapshot {
@@ -378,6 +566,20 @@ struct BotSnapshot {
     AuraEntry target_auras[kMaxTargetAuras] = {};
     // The results of the last actions the core applied for this bot, newest first; sequence 0 marks an unused entry. last_action_* mirrors results[0].
     ActionResult results[kMaxActionResults] = {};
+    // Layout 25: the bot's group view and its own entry in it (indexes into the party view and party member sections, kNoPartyView for none: no
+    // group, or Bot.Snapshot.PartyView off), the enemy telegraphs near it (the first telegraph_count of telegraphs[]), the answers to its position
+    // probes (the first probe_count of probes[], oldest first; probe_sequence is the newest answer's sequence, 0 before the first), and role_hint:
+    // the role its module last gave the core for its talents (0 none, 1 tank, 2 healer, 3 damage), so a module restart finds the roles again.
+    std::uint32_t party_view_index = kNoPartyView;
+    std::uint32_t party_member_index = kNoPartyView;
+    std::uint8_t telegraph_count = 0;
+    std::uint8_t probe_count = 0;
+    std::uint8_t role_hint = 0;
+    std::uint8_t reserved25 = 0;
+    std::uint32_t probe_sequence = 0;
+    Telegraph telegraphs[kMaxTelegraphs] = {};
+    ProbeResult probes[kMaxProbeResults] = {};
+    std::uint32_t reserved25b[2] = {};
     // NearbyUnit entries for this bot live in the region's flexible nearby-units area,
     // offset-addressed using Tier2RegionHeader::max_nearby_units; Tier2Session exposes them through NearbyOf().
 };
@@ -388,6 +590,10 @@ struct BotSnapshot {
 struct WorldTickSnapshotHeader {
     std::uint64_t tick_number = 0;
     std::uint32_t bot_count = 0;
+    // Layout 25: the party views and party members the core filled in this buffer (the sections hold max_party_views and max_party_members slots).
+    std::uint32_t party_view_count = 0;
+    std::uint32_t party_member_count = 0;
+    std::uint32_t reserved25 = 0;
 };
 
 enum class ActionType : std::uint32_t {
@@ -493,7 +699,17 @@ enum class ActionType : std::uint32_t {
                          // else it says the spend was refused and the points stay unspent (SpendBotTalents spends them later, never a second reset).
     kEmote = 30,           // SDK 0.25 (protocol 21): a bot emote. The Tier 1 request is ModuleClient::BotEmote (EmoteAction); this value reserves the number for core.
     kLfgJoin = 31,         // SDK 0.25 (protocol 21): a bot joins the dungeon finder. The Tier 1 request is ModuleClient::BotLfgJoin (LfgJoinAction).
-    kLastActionType = kLfgJoin, // the highest valid value; PublishActions refuses anything above it
+    kTransport = 32,       // layout 25: RESERVED for the transport design (MOD-Forever-Bots doc/transports.md): spell_id 1 board the transport with entry target_guid,
+                           // 2 leave it, 3 join the leader's transport. The core answers kRefused with a reason until it is implemented; the number is fixed here so
+                           // the module can carry the code. Needs Bot.Actions.Transport in the core.
+    kStopCast = 33,        // layout 25: stop the bot's cast or channel in progress (an overheal cancel, a kick that is no longer needed). No arguments. kRefused
+                           // when nothing is being cast. Needs Bot.Actions.StopCast in the core.
+    kProbePoint = 34,      // layout 25: the position probe (plan Phase 5.3): ask what the core knows about the point (dest_x, dest_y, dest_z) on the bot's map:
+                           // whether the bot has a route to it and how long, the ground height, water, and (target_guid, when not 0) whether the point is in line
+                           // of sight of that unit. spell_id is the module's own probe id, echoed back. The answer is the next snapshot's BotSnapshot::probes
+                           // (ProbeResult); the action result is kApplied, or kBusy when the core's per-tick probe budget (Bot.Probe.PerTick) is used up: ask
+                           // again next tick. Needs Bot.Actions.Probe in the core. Costs a path calculation and a line-of-sight check: ration them.
+    kLastActionType = kProbePoint, // the highest valid value; PublishActions refuses anything above it
 };
 
 // A unit as one 64-bit value (BotAction::target_guid, NearbyUnit::guid). See MakeUnitRef.
@@ -557,8 +773,29 @@ struct Tier2RegionHeader {
     std::atomic<std::uint64_t> published_action_tick{0};
     std::atomic<std::uint8_t> published_action_buffer{0}; // 0 or 1
 
+    // Layout 25: the oldest layout a module may be built against to read this region (kTier2LayoutBase, see the growth rule), the party slots
+    // (Tier2PartyViewSlots and Tier2PartyMemberSlots of max_bots, repeated here so a module needs no formula), the region geometry as the core
+    // laid it out (so a module built against an older layout of the same base needs none of the helpers below: header_bytes is where the first
+    // snapshot buffer starts, snapshot_bytes the size of one, action_offset where the first action buffer starts and action_bytes the size of one;
+    // action_header_bytes and action_stride are the core's sizeof(ActionQueueHeader) and sizeof(BotAction), which the module writes actions with),
+    // and the section table: the first section_count entries of sections[] say where each array of a snapshot buffer lies and with what stride.
+    std::uint8_t reserved_header[3] = {};
+    std::uint32_t layout_base = kTier2LayoutBase;
+    std::uint32_t max_party_views = 0;
+    std::uint32_t max_party_members = 0;
+    std::uint32_t section_count = 0;
+    std::uint32_t action_header_bytes = 0;
+    std::uint64_t header_bytes = 0;
+    std::uint64_t snapshot_bytes = 0;
+    std::uint64_t action_offset = 0;
+    std::uint64_t action_bytes = 0;
+    std::uint32_t action_stride = 0;
+    std::uint32_t reserved_header2 = 0;
+    Tier2Section sections[kMaxTier2Sections] = {};
+
     // Followed in memory by, each sized from the bounds above (offsets: see the helpers below):
-    //   WorldTickSnapshotHeader + BotSnapshot[max_bots] + NearbyUnit[max_bots * max_nearby_units], x2 buffers
+    //   WorldTickSnapshotHeader + BotSnapshot[max_bots] + NearbyUnit[max_bots * max_nearby_units]
+    //     + PartyView[max_party_views] + PartyMember[max_party_members], x2 buffers
     //   ActionQueueHeader + BotAction[max_actions], x2 buffers
 };
 
@@ -581,6 +818,16 @@ static_assert(std::is_standard_layout_v<BotAction> && std::is_trivially_copyable
               "BotAction must be POD for shared-memory use");
 static_assert(std::is_standard_layout_v<ActionQueueHeader> && std::is_trivially_copyable_v<ActionQueueHeader>,
               "ActionQueueHeader must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<Telegraph> && std::is_trivially_copyable_v<Telegraph>,
+              "Telegraph must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<ProbeResult> && std::is_trivially_copyable_v<ProbeResult>,
+              "ProbeResult must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<PartyMember> && std::is_trivially_copyable_v<PartyMember>,
+              "PartyMember must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<PartyView> && std::is_trivially_copyable_v<PartyView>,
+              "PartyView must be POD for shared-memory use");
+static_assert(std::is_standard_layout_v<Tier2Section> && std::is_trivially_copyable_v<Tier2Section>,
+              "Tier2Section must be POD for shared-memory use");
 
 static_assert(sizeof(bool) == 1, "NearbyUnit::is_hostile assumes a 1-byte bool");
 
@@ -602,11 +849,45 @@ constexpr std::size_t Tier2HeaderBytes()
     return tier2_detail::AlignUp(sizeof(Tier2RegionHeader));
 }
 
+// Layout 25: the party slots of a region are a function of its bot bound, so no handshake field is needed. Views: every bot's group has at least
+// two members, so at most max_bots / 2 groups of bots, plus one for a bot grouped with humans only. Members: every bot once, plus as many humans.
+// A group beyond the slots is not built (its bots read kNoPartyView); a member beyond them is left out of its view.
+constexpr std::uint32_t Tier2PartyViewSlots(std::uint32_t maxBots)
+{
+    return maxBots / 2 + 1;
+}
+
+constexpr std::uint32_t Tier2PartyMemberSlots(std::uint32_t maxBots)
+{
+    return maxBots * 2;
+}
+
+// Offsets of the sections inside one snapshot buffer (the core writes the same numbers into the header's section table). Every struct here is a
+// multiple of 8 bytes long, so each section starts 8-aligned when the buffer does.
+constexpr std::size_t Tier2BotsSectionOffset()
+{
+    return sizeof(WorldTickSnapshotHeader);
+}
+
+constexpr std::size_t Tier2NearbySectionOffset(std::uint32_t maxBots)
+{
+    return Tier2BotsSectionOffset() + std::size_t(maxBots) * sizeof(BotSnapshot);
+}
+
+constexpr std::size_t Tier2PartyViewsSectionOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits)
+{
+    return Tier2NearbySectionOffset(maxBots) + std::size_t(maxBots) * maxNearbyUnits * sizeof(NearbyUnit);
+}
+
+constexpr std::size_t Tier2PartyMembersSectionOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits)
+{
+    return Tier2PartyViewsSectionOffset(maxBots, maxNearbyUnits) + std::size_t(Tier2PartyViewSlots(maxBots)) * sizeof(PartyView);
+}
+
 constexpr std::size_t Tier2SnapshotBufferBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits)
 {
-    return tier2_detail::AlignUp(sizeof(WorldTickSnapshotHeader) +
-                                 std::size_t(maxBots) * sizeof(BotSnapshot) +
-                                 std::size_t(maxBots) * maxNearbyUnits * sizeof(NearbyUnit));
+    return tier2_detail::AlignUp(Tier2PartyMembersSectionOffset(maxBots, maxNearbyUnits) +
+                                 std::size_t(Tier2PartyMemberSlots(maxBots)) * sizeof(PartyMember));
 }
 
 constexpr std::size_t Tier2ActionBufferBytes(std::uint32_t maxActions)
@@ -629,6 +910,35 @@ constexpr std::size_t Tier2ActionBufferOffset(std::uint32_t maxBots, std::uint32
 {
     return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits) +
            buffer * Tier2ActionBufferBytes(maxActions);
+}
+
+// Layout 25: writes the geometry and the section table of a region into its header, from the bounds already set in it (max_bots,
+// max_nearby_units, max_actions). The core calls it once after it set the bounds; a test that plays the core does the same. layout_version is
+// left alone (a test writes a wrong one on purpose).
+inline void Tier2DescribeRegion(Tier2RegionHeader& header)
+{
+    std::uint32_t const bots = header.max_bots;
+    std::uint32_t const nearby = header.max_nearby_units;
+    header.layout_base = kTier2LayoutBase;
+    header.max_party_views = Tier2PartyViewSlots(bots);
+    header.max_party_members = Tier2PartyMemberSlots(bots);
+    header.header_bytes = Tier2HeaderBytes();
+    header.snapshot_bytes = Tier2SnapshotBufferBytes(bots, nearby);
+    header.action_offset = Tier2ActionBufferOffset(bots, nearby, header.max_actions, 0);
+    header.action_bytes = Tier2ActionBufferBytes(header.max_actions);
+    header.action_header_bytes = std::uint32_t(sizeof(ActionQueueHeader));
+    header.action_stride = std::uint32_t(sizeof(BotAction));
+    header.section_count = 4;
+    header.sections[0] = Tier2Section{ std::uint32_t(Tier2SectionKind::kBots), std::uint32_t(sizeof(BotSnapshot)), bots, 0,
+                                       std::uint64_t(Tier2BotsSectionOffset()) };
+    header.sections[1] = Tier2Section{ std::uint32_t(Tier2SectionKind::kNearbyUnits), std::uint32_t(sizeof(NearbyUnit)), bots * nearby, 0,
+                                       std::uint64_t(Tier2NearbySectionOffset(bots)) };
+    header.sections[2] = Tier2Section{ std::uint32_t(Tier2SectionKind::kPartyViews), std::uint32_t(sizeof(PartyView)), header.max_party_views, 0,
+                                       std::uint64_t(Tier2PartyViewsSectionOffset(bots, nearby)) };
+    header.sections[3] = Tier2Section{ std::uint32_t(Tier2SectionKind::kPartyMembers), std::uint32_t(sizeof(PartyMember)), header.max_party_members, 0,
+                                       std::uint64_t(Tier2PartyMembersSectionOffset(bots, nearby)) };
+    for (std::size_t i = 4; i < kMaxTier2Sections; ++i)
+        header.sections[i] = Tier2Section{};
 }
 
 } // namespace forever_module

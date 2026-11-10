@@ -93,8 +93,10 @@ object of the same name.
      depend on the Tier 1 handshake;
    - `Tier 2 region '<name>' is smaller than its header says`.
 3. `AttachTier2()` itself also fails with `no Tier 2 region was granted at handshake` when the handshake returned no region name.
-4. The structs are plain data (no pointers), so both processes read the same bytes. `tier2_session.cpp` has `static_assert`s on their sizes (at layout 22:
-   `BotSnapshot` 1136, `NearbyUnit` 48, `GroundEffect` 24, `Tier2RegionHeader` 56, `WorldTickSnapshotHeader` 16, `ActionQueueHeader` 16, `BotAction` 40 bytes).
+4. The structs are plain data (no pointers), so both processes read the same bytes. `tier2_session.cpp` has `static_assert`s on their sizes (at layout 25:
+   `BotSnapshot` 1856, `NearbyUnit` 136, `GroundEffect` 24, `PartyView` 320, `PartyMember` 176, `Telegraph` 48, `ProbeResult` 32, `Tier2RegionHeader` 304,
+   `WorldTickSnapshotHeader` 24, `ActionQueueHeader` 16, `BotAction` 40 bytes). Layout 25 adds the growth rule (`kTier2LayoutBase`, the section table in the
+   region header): `Attach` also accepts a region of a newer layout whose base this SDK meets, and reads it with the core's element strides.
 
 ### How snapshots and actions move
 

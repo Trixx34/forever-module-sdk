@@ -26,14 +26,32 @@ struct WorldTickSnapshotView {
     std::vector<NearbyUnit> nearby;
     std::uint32_t max_nearby_units = 0;
 
+    // Layout 25: the party views the core built this tick and the member pool they index into. Use PartyViewOf() and MembersOf()
+    // rather than indexing: a bot's party_view_index is kNoPartyView when its group was not built.
+    std::vector<PartyView> party_views;
+    std::vector<PartyMember> party_members;
+
     // The units near bots[botIndex], up to its nearby_count. Empty if the index is out of range.
     std::span<NearbyUnit const> NearbyOf(std::size_t botIndex) const;
+
+    // Layout 25: the group view of bots[botIndex], or nullptr (no group, the core's Bot.Snapshot.PartyView off, out of slots, bad index).
+    PartyView const* PartyViewOf(std::size_t botIndex) const;
+    // The members of a view, in the group's slot order; empty when the view's range is not inside the pool.
+    std::span<PartyMember const> MembersOf(PartyView const& view) const;
+    // The bot's own entry in its view, or nullptr.
+    PartyMember const* MemberOf(std::size_t botIndex) const;
+    // The enemy telegraphs near bots[botIndex], the first telegraph_count. Empty if the index is out of range.
+    std::span<Telegraph const> TelegraphsOf(std::size_t botIndex) const;
+    // The answered probes of bots[botIndex], oldest first (the first probe_count). Empty if the index is out of range.
+    std::span<ProbeResult const> ProbesOf(std::size_t botIndex) const;
 };
 
 class Tier2Session {
 public:
     // Maps the region named `regionName`. Returns nullptr and sets error if the region is missing, too small, or
-    // written with a layout version this SDK does not understand.
+    // written with a layout version this SDK does not understand: older than kTier2LayoutVersion, or newer with a
+    // layout_base above it (the growth rule in tier2_layout.h). A newer region whose base this SDK meets is read
+    // through its section table, with the core's element strides.
     static std::unique_ptr<Tier2Session> Attach(std::string const& regionName, std::string& error);
 
     ~Tier2Session();
@@ -46,6 +64,10 @@ public:
     std::uint32_t MaxNearbyUnits() const;
     std::uint32_t MaxActions() const;
     std::uint32_t TickInterval() const;
+    // Layout 25: the layout the core writes (kTier2LayoutVersion or newer), and the party slots.
+    std::uint32_t LayoutVersion() const;
+    std::uint32_t MaxPartyViews() const;
+    std::uint32_t MaxPartyMembers() const;
 
     // True once ReadLatestSnapshot() has copied a whole snapshot. PublishActions() needs one.
     bool HasSnapshot() const { return haveSnapshot_; }
