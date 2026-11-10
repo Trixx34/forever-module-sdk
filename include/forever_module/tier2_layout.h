@@ -362,8 +362,8 @@ struct BotSnapshot {
     std::uint32_t item_level = 0;
     // Layout 24: the time left on the global cooldown the bot is under (0 when it is free), the bot's movement state, the transport it stands on,
     // the nearest banker, the auras on the bot's current target, and a ring of the last action results.
-    // movement_flags: bit 0 swimming (in water), bit 1 flying, bit 2 falling, bit 3 on a transport. transport_guid: the unit reference of the transport
-    // (a ship, zeppelin or elevator) the bot is on, 0 for none.
+    // movement_flags: bit 0 swimming (in water), bit 1 flying, bit 2 falling, bit 3 on a transport. transport_guid: the entry of the transport
+    // (a ship, zeppelin or elevator, a game object) the bot is on, 0 for none.
     std::uint32_t gcd_remaining_ms = 0;
     std::uint32_t movement_flags = 0;
     std::uint64_t transport_guid = 0;
