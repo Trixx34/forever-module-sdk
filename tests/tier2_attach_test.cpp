@@ -295,11 +295,11 @@ int main()
         CHECK(header->published_action_buffer.load() == 0);
 
         // Every type up to kGroup is known: a rest or a party action is accepted, not refused as unknown.
-        BotAction party;
-        party.bot_guid = 42;
-        party.type = ActionType::kGroup;
-        party.spell_id = 3;
-        CHECK(session->PublishActions({party}, actionError));
+        BotAction partyAction;
+        partyAction.bot_guid = 42;
+        partyAction.type = ActionType::kGroup;
+        partyAction.spell_id = 3;
+        CHECK(session->PublishActions({partyAction}, actionError));
 
         BotAction loot;
         loot.bot_guid = 42;
