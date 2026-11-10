@@ -88,8 +88,10 @@ result is empty with `tick_number` 0, and `HasSnapshot()` is `false`.
 
 One `PartyView` per group, shared by every bot of the group, and one pool of `PartyMember` entries for the whole snapshot (`view.member_first`, `view.member_count`
 into `party_members`; `WorldTickSnapshotView::MembersOf(view)` gives the span). Built by the core only with `Bot.Snapshot.PartyView = 1`; a group in combat or in
-an instance is rebuilt every tick, an idle one one tick in `Bot.Snapshot.PartyViewIdleTicks` (`generation` tells a reused view). The region has
-`Tier2PartyViewSlots(max_bots)` = `max_bots / 2 + 1` view slots and `Tier2PartyMemberSlots(max_bots)` = `2 * max_bots` member slots; a group beyond them is not built.
+an instance is rebuilt every tick, an idle one one tick in `Bot.Snapshot.PartyViewIdleTicks` (`generation` tells a reused view). The slot counts
+are the core's choice (its `Modules.Tier2.MaxPartyViews`; default `Tier2PartyViewSlots(max_bots)` = `max_bots / 2 + 1`) and are read from the region header
+(`max_party_views`, `max_party_members`, `Tier2Session::MaxPartyViews()` / `MaxPartyMembers()`), never from a formula; the member pool is
+`Tier2PartyMemberSlots(max_bots, views)` = `max(2 * max_bots, 2 * views)`. A group beyond the view slots is not built; a member beyond the pool is left out.
 
 | Field | Type | Meaning |
 |---|---|---|

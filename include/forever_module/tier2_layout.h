@@ -774,7 +774,7 @@ struct Tier2RegionHeader {
     std::atomic<std::uint8_t> published_action_buffer{0}; // 0 or 1
 
     // Layout 25: the oldest layout a module may be built against to read this region (kTier2LayoutBase, see the growth rule), the party slots
-    // (Tier2PartyViewSlots and Tier2PartyMemberSlots of max_bots, repeated here so a module needs no formula), the region geometry as the core
+    // (the core's choice, Tier2PartyViewSlots(max_bots) by default and Tier2PartyMemberSlots(max_bots, views); a module reads them here, not from a formula), the region geometry as the core
     // laid it out (so a module built against an older layout of the same base needs none of the helpers below: header_bytes is where the first
     // snapshot buffer starts, snapshot_bytes the size of one, action_offset where the first action buffer starts and action_bytes the size of one;
     // action_header_bytes and action_stride are the core's sizeof(ActionQueueHeader) and sizeof(BotAction), which the module writes actions with),
@@ -849,21 +849,28 @@ constexpr std::size_t Tier2HeaderBytes()
     return tier2_detail::AlignUp(sizeof(Tier2RegionHeader));
 }
 
-// Layout 25: the party slots of a region are a function of its bot bound, so no handshake field is needed. Views: every bot's group has at least
-// two members, so at most max_bots / 2 groups of bots, plus one for a bot grouped with humans only. Members: every bot once, plus as many humans.
-// A group beyond the slots is not built (its bots read kNoPartyView); a member beyond them is left out of its view.
+// Layout 25: the party slots of a region. The core chooses the view count (Modules.Tier2.MaxPartyViews; 0 = the default below) and writes it into
+// the header with the member pool that follows from it; the module reads both from the header (Tier2RegionHeader::max_party_views,
+// max_party_members), so no handshake field is needed and the two sides cannot disagree. Default views: every bot's group has at least two
+// members, so at most max_bots / 2 groups of bots, plus one for a bot grouped with humans only. Members: every bot once plus as many humans, and
+// never fewer than two per view. A group beyond the slots is not built (its bots read kNoPartyView); a member beyond them is left out of its view.
 constexpr std::uint32_t Tier2PartyViewSlots(std::uint32_t maxBots)
 {
     return maxBots / 2 + 1;
 }
 
+constexpr std::uint32_t Tier2PartyMemberSlots(std::uint32_t maxBots, std::uint32_t maxPartyViews)
+{
+    return maxBots * 2 > maxPartyViews * 2 ? maxBots * 2 : maxPartyViews * 2;
+}
+
 constexpr std::uint32_t Tier2PartyMemberSlots(std::uint32_t maxBots)
 {
-    return maxBots * 2;
+    return Tier2PartyMemberSlots(maxBots, Tier2PartyViewSlots(maxBots));
 }
 
 // Offsets of the sections inside one snapshot buffer (the core writes the same numbers into the header's section table). Every struct here is a
-// multiple of 8 bytes long, so each section starts 8-aligned when the buffer does.
+// multiple of 8 bytes long, so each section starts 8-aligned when the buffer does. The forms without the party slots use the defaults above.
 constexpr std::size_t Tier2BotsSectionOffset()
 {
     return sizeof(WorldTickSnapshotHeader);
@@ -879,15 +886,26 @@ constexpr std::size_t Tier2PartyViewsSectionOffset(std::uint32_t maxBots, std::u
     return Tier2NearbySectionOffset(maxBots) + std::size_t(maxBots) * maxNearbyUnits * sizeof(NearbyUnit);
 }
 
+constexpr std::size_t Tier2PartyMembersSectionOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxPartyViews)
+{
+    return Tier2PartyViewsSectionOffset(maxBots, maxNearbyUnits) + std::size_t(maxPartyViews) * sizeof(PartyView);
+}
+
 constexpr std::size_t Tier2PartyMembersSectionOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits)
 {
-    return Tier2PartyViewsSectionOffset(maxBots, maxNearbyUnits) + std::size_t(Tier2PartyViewSlots(maxBots)) * sizeof(PartyView);
+    return Tier2PartyMembersSectionOffset(maxBots, maxNearbyUnits, Tier2PartyViewSlots(maxBots));
+}
+
+constexpr std::size_t Tier2SnapshotBufferBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxPartyViews,
+                                               std::uint32_t maxPartyMembers)
+{
+    return tier2_detail::AlignUp(Tier2PartyMembersSectionOffset(maxBots, maxNearbyUnits, maxPartyViews) +
+                                 std::size_t(maxPartyMembers) * sizeof(PartyMember));
 }
 
 constexpr std::size_t Tier2SnapshotBufferBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits)
 {
-    return tier2_detail::AlignUp(Tier2PartyMembersSectionOffset(maxBots, maxNearbyUnits) +
-                                 std::size_t(Tier2PartyMemberSlots(maxBots)) * sizeof(PartyMember));
+    return Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits, Tier2PartyViewSlots(maxBots), Tier2PartyMemberSlots(maxBots));
 }
 
 constexpr std::size_t Tier2ActionBufferBytes(std::uint32_t maxActions)
@@ -895,36 +913,59 @@ constexpr std::size_t Tier2ActionBufferBytes(std::uint32_t maxActions)
     return tier2_detail::AlignUp(sizeof(ActionQueueHeader) + std::size_t(maxActions) * sizeof(BotAction));
 }
 
+constexpr std::size_t Tier2RegionBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxActions, std::uint32_t maxPartyViews,
+                                       std::uint32_t maxPartyMembers)
+{
+    return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits, maxPartyViews, maxPartyMembers) +
+           2 * Tier2ActionBufferBytes(maxActions);
+}
+
 constexpr std::size_t Tier2RegionBytes(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxActions)
 {
-    return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits) + 2 * Tier2ActionBufferBytes(maxActions);
+    return Tier2RegionBytes(maxBots, maxNearbyUnits, maxActions, Tier2PartyViewSlots(maxBots), Tier2PartyMemberSlots(maxBots));
+}
+
+constexpr std::size_t Tier2SnapshotBufferOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxPartyViews,
+                                                std::uint32_t maxPartyMembers, std::uint8_t buffer)
+{
+    return Tier2HeaderBytes() + buffer * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits, maxPartyViews, maxPartyMembers);
 }
 
 constexpr std::size_t Tier2SnapshotBufferOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint8_t buffer)
 {
-    return Tier2HeaderBytes() + buffer * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits);
+    return Tier2SnapshotBufferOffset(maxBots, maxNearbyUnits, Tier2PartyViewSlots(maxBots), Tier2PartyMemberSlots(maxBots), buffer);
+}
+
+constexpr std::size_t Tier2ActionBufferOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxActions,
+                                              std::uint32_t maxPartyViews, std::uint32_t maxPartyMembers, std::uint8_t buffer)
+{
+    return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits, maxPartyViews, maxPartyMembers) +
+           buffer * Tier2ActionBufferBytes(maxActions);
 }
 
 constexpr std::size_t Tier2ActionBufferOffset(std::uint32_t maxBots, std::uint32_t maxNearbyUnits, std::uint32_t maxActions,
                                               std::uint8_t buffer)
 {
-    return Tier2HeaderBytes() + 2 * Tier2SnapshotBufferBytes(maxBots, maxNearbyUnits) +
-           buffer * Tier2ActionBufferBytes(maxActions);
+    return Tier2ActionBufferOffset(maxBots, maxNearbyUnits, maxActions, Tier2PartyViewSlots(maxBots), Tier2PartyMemberSlots(maxBots), buffer);
 }
 
 // Layout 25: writes the geometry and the section table of a region into its header, from the bounds already set in it (max_bots,
-// max_nearby_units, max_actions). The core calls it once after it set the bounds; a test that plays the core does the same. layout_version is
-// left alone (a test writes a wrong one on purpose).
+// max_nearby_units, max_actions, and max_party_views when the core chose one: 0 takes the default, and the member pool follows the view count).
+// The core calls it once after it set the bounds; a test that plays the core does the same. layout_version is left alone (a test writes a
+// wrong one on purpose).
 inline void Tier2DescribeRegion(Tier2RegionHeader& header)
 {
     std::uint32_t const bots = header.max_bots;
     std::uint32_t const nearby = header.max_nearby_units;
     header.layout_base = kTier2LayoutBase;
-    header.max_party_views = Tier2PartyViewSlots(bots);
-    header.max_party_members = Tier2PartyMemberSlots(bots);
+    if (header.max_party_views == 0)
+        header.max_party_views = Tier2PartyViewSlots(bots);
+    header.max_party_members = Tier2PartyMemberSlots(bots, header.max_party_views);
+    std::uint32_t const views = header.max_party_views;
+    std::uint32_t const members = header.max_party_members;
     header.header_bytes = Tier2HeaderBytes();
-    header.snapshot_bytes = Tier2SnapshotBufferBytes(bots, nearby);
-    header.action_offset = Tier2ActionBufferOffset(bots, nearby, header.max_actions, 0);
+    header.snapshot_bytes = Tier2SnapshotBufferBytes(bots, nearby, views, members);
+    header.action_offset = Tier2ActionBufferOffset(bots, nearby, header.max_actions, views, members, 0);
     header.action_bytes = Tier2ActionBufferBytes(header.max_actions);
     header.action_header_bytes = std::uint32_t(sizeof(ActionQueueHeader));
     header.action_stride = std::uint32_t(sizeof(BotAction));
@@ -933,10 +974,10 @@ inline void Tier2DescribeRegion(Tier2RegionHeader& header)
                                        std::uint64_t(Tier2BotsSectionOffset()) };
     header.sections[1] = Tier2Section{ std::uint32_t(Tier2SectionKind::kNearbyUnits), std::uint32_t(sizeof(NearbyUnit)), bots * nearby, 0,
                                        std::uint64_t(Tier2NearbySectionOffset(bots)) };
-    header.sections[2] = Tier2Section{ std::uint32_t(Tier2SectionKind::kPartyViews), std::uint32_t(sizeof(PartyView)), header.max_party_views, 0,
+    header.sections[2] = Tier2Section{ std::uint32_t(Tier2SectionKind::kPartyViews), std::uint32_t(sizeof(PartyView)), views, 0,
                                        std::uint64_t(Tier2PartyViewsSectionOffset(bots, nearby)) };
-    header.sections[3] = Tier2Section{ std::uint32_t(Tier2SectionKind::kPartyMembers), std::uint32_t(sizeof(PartyMember)), header.max_party_members, 0,
-                                       std::uint64_t(Tier2PartyMembersSectionOffset(bots, nearby)) };
+    header.sections[3] = Tier2Section{ std::uint32_t(Tier2SectionKind::kPartyMembers), std::uint32_t(sizeof(PartyMember)), members, 0,
+                                       std::uint64_t(Tier2PartyMembersSectionOffset(bots, nearby, views)) };
     for (std::size_t i = 4; i < kMaxTier2Sections; ++i)
         header.sections[i] = Tier2Section{};
 }

@@ -431,6 +431,40 @@ int main()
         CHECK(Tier2Session::Attach(name, geometryError) != nullptr);
     }
 
+    // The party slot counts are the core's choice: a region with 7 view slots (the default for 4 bots is 3) is attached, the SDK reads 7 and the
+    // member pool the header gives (max(2 * bots, 2 * views) = 14), not a formula of max_bots; a header whose pool disagrees is refused.
+    {
+        std::string const viewsName = name + "_views";
+        constexpr std::uint32_t views = 7;
+        static_assert(Tier2PartyMemberSlots(kBots, views) == 14 && Tier2PartyMemberSlots(kBots, 1) == 8, "member pool follows the view count");
+        std::size_t const total = Tier2RegionBytes(kBots, kNearby, kActions, views, Tier2PartyMemberSlots(kBots, views));
+        bi::shared_memory_object::remove(viewsName.c_str());
+        bi::shared_memory_object viewsShm(bi::create_only, viewsName.c_str(), bi::read_write);
+        viewsShm.truncate(static_cast<bi::offset_t>(total));
+        bi::mapped_region viewsMap(viewsShm, bi::read_write);
+        auto* header = new (viewsMap.get_address()) Tier2RegionHeader();
+        header->max_bots = kBots;
+        header->max_nearby_units = kNearby;
+        header->max_actions = kActions;
+        header->tick_interval = 1;
+        header->max_party_views = views;
+        Tier2DescribeRegion(*header);
+        CHECK(header->max_party_views == views && header->max_party_members == 14);
+        CHECK(header->sections[2].count == views && header->sections[3].count == 14);
+        CHECK(header->snapshot_bytes == Tier2SnapshotBufferBytes(kBots, kNearby, views, 14));
+        std::string viewsError;
+        auto custom = Tier2Session::Attach(viewsName, viewsError);
+        CHECK(custom != nullptr);
+        if (!custom)
+            std::printf("attach with custom view slots failed: %s\n", viewsError.c_str());
+        if (custom)
+            CHECK(custom->MaxPartyViews() == views && custom->MaxPartyMembers() == 14);
+        header->max_party_members = 13; // a pool the helper does not derive from 7 views
+        CHECK(Tier2Session::Attach(viewsName, viewsError) == nullptr);
+        CHECK(viewsError.find("geometry") != std::string::npos);
+        bi::shared_memory_object::remove(viewsName.c_str());
+    }
+
     // A region written with another layout version is refused, with the reason in the error: an older core always, a newer one when its
     // base is above this SDK's layout.
     std::string const badName = name + "_v99";

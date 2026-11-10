@@ -135,12 +135,16 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
         region.actionBytes = std::size_t(header->action_bytes);
         region.actionHeaderBytes = header->action_header_bytes;
         region.actionStride = header->action_stride;
+        // The party slot counts are the core's choice (a config key there) and are read from the header; a same-layout core must still derive the
+        // member pool from the view count the way the helper does.
+        std::uint32_t const maxViews = header->max_party_views;
+        std::uint32_t const maxMembers = header->max_party_members;
         if (sameLayout &&
-            (region.snapshotOffset != Tier2HeaderBytes() || region.snapshotBytes != Tier2SnapshotBufferBytes(maxBots, maxNearby) ||
-             region.actionOffset != Tier2ActionBufferOffset(maxBots, maxNearby, maxActions, 0) ||
+            (maxViews == 0 || maxMembers != Tier2PartyMemberSlots(maxBots, maxViews) || region.snapshotOffset != Tier2HeaderBytes() ||
+             region.snapshotBytes != Tier2SnapshotBufferBytes(maxBots, maxNearby, maxViews, maxMembers) ||
+             region.actionOffset != Tier2ActionBufferOffset(maxBots, maxNearby, maxActions, maxViews, maxMembers, 0) ||
              region.actionBytes != Tier2ActionBufferBytes(maxActions) || region.actionHeaderBytes != sizeof(ActionQueueHeader) ||
-             region.actionStride != sizeof(BotAction) || header->max_party_views != Tier2PartyViewSlots(maxBots) ||
-             header->max_party_members != Tier2PartyMemberSlots(maxBots)))
+             region.actionStride != sizeof(BotAction)))
         {
             error = "Tier 2 region '" + regionName + "' has a geometry this SDK's layout " + std::to_string(kTier2LayoutVersion) + " does not give";
             return nullptr;
@@ -177,8 +181,8 @@ std::unique_ptr<Tier2Session> Tier2Session::Attach(std::string const& regionName
         };
         if (!resolve(Tier2SectionKind::kBots, sizeof(BotSnapshot), maxBots, region.bots) ||
             !resolve(Tier2SectionKind::kNearbyUnits, sizeof(NearbyUnit), maxBots * maxNearby, region.nearby) ||
-            !resolve(Tier2SectionKind::kPartyViews, sizeof(PartyView), header->max_party_views, region.partyViews) ||
-            !resolve(Tier2SectionKind::kPartyMembers, sizeof(PartyMember), header->max_party_members, region.partyMembers) ||
+            !resolve(Tier2SectionKind::kPartyViews, sizeof(PartyView), maxViews, region.partyViews) ||
+            !resolve(Tier2SectionKind::kPartyMembers, sizeof(PartyMember), maxMembers, region.partyMembers) ||
             region.bots.offset < sizeof(WorldTickSnapshotHeader))
         {
             error = "Tier 2 region '" + regionName + "' has a section table this SDK cannot read (layout " +
