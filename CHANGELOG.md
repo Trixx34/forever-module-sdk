@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased: protocol 25, the bot's perception, layout 24
+
+- Protocol `"24"` -> `"25"`; layout `24`. The Tier 1 messages do not change; the core and every module must be rebuilt.
+- `NearbyUnit` (56 -> 128 bytes) gains `victim_ref`, `threat_top_ref`, `bot_threat_pct`, `top_is_tank`, `cast_spell_id`, `cast_remaining_ms`,
+  `cast_interruptible`, `creature_type`, `creature_rank`, `state_flags` (`NearbyStateFlag`), `orientation`, `raid_mark` and `my_debuffs[4]` (`OwnDebuff`).
+- `BotSnapshot` (1160 -> 1416 bytes) gains `gcd_remaining_ms`, `movement_flags` (swimming, flying, falling, on a transport), `transport_guid`,
+  `banker_valid/x/y/z/guid`, `target_auras[8]` with `target_aura_count`, and `results[4]` (`ActionResult`, newest first). `kMaxTrackedCooldowns` 8 -> 16.
+- Design: forever-ops `docs/121-phase1-perception-design.md`.
+
 ## Unreleased: protocol 22, group-invite-declined event, layout 23
 
 - Protocol `"21"` -> `"22"`; layout `23`. Event `GroupInviteDeclinedEvent group_invite_declined = 22` (`inviter_guid`, `decliner_guid`),

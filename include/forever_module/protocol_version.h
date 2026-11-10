@@ -13,7 +13,9 @@ namespace forever_module {
 // Bump history: 22 -> 23 adds GuildAction kCreate (SocialOp 3) and GuildAction.name (field 3): the bot creates a guild.
 // 23 -> 24 adds GuildAction kInvite (SocialOp 4) and GuildAction.player_guid (field 4): the bot invites a character to its guild.
 // Both are additive, but the core and the SDK move together, so an older core refuses the handshake instead of mis-reading the request.
-inline constexpr char const* kProtocolVersion = "24";
+// 24 -> 25 is the Tier 2 layout 24 (the bot's perception: NearbyUnit victim/threat/cast/type/flags/orientation/raid mark/own debuffs, BotSnapshot gcd_remaining_ms,
+// movement_flags, transport_guid, banker, target auras, an action result ring, 16 cooldown slots). The Tier 1 messages do not change.
+inline constexpr char const* kProtocolVersion = "25";
 
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire

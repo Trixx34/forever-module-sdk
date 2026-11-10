@@ -74,6 +74,13 @@ std::unique_ptr<bi::shared_memory_object> CreateRegion(std::string const& name, 
 
 } // namespace
 
+// Layout 24: the new fields stay where the core writes them. The core's ModuleTier2.cpp pins the same sizes; offsetof is checked here so a reordered field fails
+// to compile on both sides.
+static_assert(sizeof(NearbyUnit) == 128 && offsetof(NearbyUnit, victim_ref) == 56 && offsetof(NearbyUnit, my_debuffs) == 96, "NearbyUnit layout 24");
+static_assert(sizeof(OwnDebuff) == 8 && sizeof(ActionResult) == 12, "layout 24 element sizes");
+static_assert(kMaxTrackedCooldowns == 16 && kMaxTargetAuras == 8 && kMaxActionResults == 4 && kMaxOwnDebuffs == 4, "layout 24 counts");
+static_assert(sizeof(BotSnapshot) == 1416, "BotSnapshot layout 24");
+
 int main()
 {
     // Unit references pack and unpack without loss inside their field widths.
