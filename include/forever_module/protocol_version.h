@@ -3,8 +3,9 @@
 
 namespace forever_module {
 
-// protocol_version is the exact-match gate against core's compiled-in wire protocol
-// (doc/module-system/04-phase2-module-host-design.md; core's kModuleProtocolVersion must equal this).
+// protocol_version is the gate against core's compiled-in wire protocol (doc/module-system/04-phase2-module-host-design.md; core's
+// kModuleProtocolVersion must equal this in the same revision). From layout 25 a core accepts any module protocol from its kModuleProtocolBase up to
+// its own (a newer core of the same layout base serves this module); a different base is refused. This SDK sends kProtocolVersion as before.
 // Only bump this on breaking changes to the Tier 1 message schema or the Tier 2 shared-memory layout.
 // Bump history: 20 -> 21 adds EmoteAction (ActionRequest fields 27 and 28, with LfgJoinAction), SpeakKind kParty/kGuild, the core-to-module
 // GuildMemberLevelEvent and LfgQueueEvent, and ActionType kEmote/kLfgJoin; all additive, but the core and the SDK move together to "21".

@@ -4,7 +4,7 @@
 
 - Protocol `"25"` -> `"26"`; layout `25`, base `25` (`kTier2LayoutBase`, the growth rule in `tier2_layout.h`: from here on fields are appended, a module reads a
   newer region through the section table with the core's strides, and `Tier2Session::Attach` refuses only an older core or a newer one whose base it does not meet).
-  The Tier 1 messages do not change; the core and every module must be rebuilt (the Tier 1 handshake still refuses a protocol mismatch).
+  The Tier 1 messages do not change; the core and every module must be rebuilt (the core's Tier 1 check now follows the layout base rule: it serves modules from its `kModuleProtocolBase` to its own protocol, so a newer core of base 25 accepts this module; a different base is refused. The SDK sends `kProtocolVersion` unchanged).
 - `PartyView` (320 bytes, one per group, `max_party_views` slots, default `Tier2PartyViewSlots(max_bots)`; the core's config key `Modules.Tier2.MaxPartyViews` sets it) and `PartyMember` (176 bytes, one pool of `max_party_members` = `Tier2PartyMemberSlots(max_bots, views)`; `Tier2Session` reads both counts from the header, `Tier2DescribeRegion` keeps a `max_party_views` already set):
   members with class, role, subgroup, bot flag, health, power, life state, position, map, victim, cast, `debuffs[6]` (`PartyDebuff`, dispel type), pet,
   transport and attacker count; per group the leader, main tank and assist, `raid_marks[8]`, `loose_mobs[8]` (`LooseMob`: a creature on a non-tank, with how

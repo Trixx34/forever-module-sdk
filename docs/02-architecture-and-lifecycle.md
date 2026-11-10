@@ -27,7 +27,7 @@ partly out of date; where it differs, the code is described here. Where the code
    1. the name must be letters, digits, `_` and `-`; otherwise skipped with a warning;
    2. `module.json` must exist and parse, with `name`, `version`, `protocol_version` present; its `name` must equal the folder name; otherwise skipped (with a
       warning, or an error for a parse failure);
-   3. **protocol check**: `protocol_version` must equal the core's `kModuleProtocolVersion` as a string, else the module is marked **permanently failed**
+   3. **protocol check**: `protocol_version` must lie between the core's `kModuleProtocolBase` and `kModuleProtocolVersion` (layout base rule; the two are equal until a core appends), else the module is marked **permanently failed**
       (`protocol_version mismatch: core speaks "20", module declared "19"`) and never started;
    4. **approval gate** (below): not approved means status `pending approval`, not started;
    5. the executable `<Modules.Dir>/<name>/<name>` (`.exe` on Windows) must be a regular file, else permanently failed (`executable not found`);
