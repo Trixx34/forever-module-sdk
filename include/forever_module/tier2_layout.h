@@ -380,8 +380,9 @@ enum class ActionType : std::uint32_t {
                          // away, starts the bot walking to it (kMoving: ask again); in reach it casts the gathering spell, and the loot is taken with kLoot as for a
                          // kill. kRefused with a reason when there is nothing to gather, the bot has no such skill, or it is in combat or dead; kBusy while casting.
     kPetCommand = 22,    // command the bot's pet (layout 13). spell_id 1 = attack target_guid, 2 = follow the bot,
-                         // 3 = stay; 4 = set stance (spell_id 4, dest_x = the stance value). Refused in combat
-                         // and when the bot has no pet (status kInvalidTarget).
+                         // 3 = stay; 4 = set stance (spell_id 4, dest_x = the stance value). Refused when the bot has no pet
+                         // (status kInvalidTarget); 1-3 are allowed in combat too (redirecting the pet is often needed mid-fight),
+                         // only 4 (the stance) is out-of-combat only.
     kConsume = 23,       // layout 15: eat or drink. spell_id 1 uses the best food the bot carries, 2 the best drink. The bot sits while it
                          // restores, as for a player. Refused in combat, when the bot carries none, and unless Bot.Actions.Supplies is on.
                          // Layout 16: 3 uses the best health potion, 4 the best mana potion (both also allowed in combat; the game's potion
