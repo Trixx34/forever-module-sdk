@@ -1344,10 +1344,10 @@ Failures RunProtocol21Scenario()
     boost::asio::io_context io;
     stream_protocol::acceptor acceptor(io, stream_protocol::endpoint(path));
 
-    EXPECT_IN(clientFails, std::string(kProtocolVersion) == "25");
+    EXPECT_IN(clientFails, std::stoi(std::string(kProtocolVersion)) >= 25); // the protocol only grows; this scenario needs the actions of protocol 21 and later
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kEmote) == 30);
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kLfgJoin) == 31);
-    EXPECT_IN(clientFails, ActionType::kLastActionType == ActionType::kLfgJoin);
+    EXPECT_IN(clientFails, static_cast<std::uint32_t>(ActionType::kLastActionType) >= static_cast<std::uint32_t>(ActionType::kLfgJoin));
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ModuleClient::SpeakKind::kParty) == 3);
     EXPECT_IN(clientFails, static_cast<std::uint32_t>(ModuleClient::SpeakKind::kGuild) == 4);
 
