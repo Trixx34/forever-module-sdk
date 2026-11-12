@@ -699,9 +699,15 @@ enum class ActionType : std::uint32_t {
                          // else it says the spend was refused and the points stay unspent (SpendBotTalents spends them later, never a second reset).
     kEmote = 30,           // SDK 0.25 (protocol 21): a bot emote. The Tier 1 request is ModuleClient::BotEmote (EmoteAction); this value reserves the number for core.
     kLfgJoin = 31,         // SDK 0.25 (protocol 21): a bot joins the dungeon finder. The Tier 1 request is ModuleClient::BotLfgJoin (LfgJoinAction).
-    kTransport = 32,       // layout 25: RESERVED for the transport design (MOD-Forever-Bots doc/transports.md): spell_id 1 board the transport with entry target_guid,
-                           // 2 leave it, 3 join the leader's transport. The core answers kRefused with a reason until it is implemented; the number is fixed here so
-                           // the module can carry the code. Needs Bot.Actions.Transport in the core.
+    kTransport = 32,       // layout 25: ships, zeppelins and elevators (MOD-Forever-Bots doc/transports.md). A bot has no client, so it only becomes a passenger when the
+                           // core puts it there. spell_id 1: board the transport whose game object entry is target_guid (BotSnapshot::transport_guid and
+                           // PartyMember::transport_entry carry entries); the bot must be near it (kOutOfRange otherwise: walk to the deck side), out of combat, alive,
+                           // not in water or on a flight, not in an instance. spell_id 2: leave: allowed at a dock (the transport stopped) or with the ground close below,
+                           // else kRefused with a reason. spell_id 3: join the transport the group leader stands on, at the leader's place (kInvalidTarget with no
+                           // leader in the world, kRefused when the leader is on no transport, kOutOfRange when the bot is too far from the leader on the same map; a
+                           // bot on another map is brought to it). A bot that is a passenger moves with the transport: send it no kMoveTo (the offsets would be wrong),
+                           // only kStop/kFollow. Needs Bot.Actions.Transport in the core (default off, refused with a reason naming the key). The module reads the leader's
+                           // map, position and transport from the party view (PartyMember with kPartyMemberLeader: map_id, pos, transport_entry): needs Bot.Snapshot.PartyView.
     kStopCast = 33,        // layout 25: stop the bot's cast or channel in progress (an overheal cancel, a kick that is no longer needed). No arguments. kRefused
                            // when nothing is being cast. Needs Bot.Actions.StopCast in the core.
     kProbePoint = 34,      // layout 25: the position probe (plan Phase 5.3): ask what the core knows about the point (dest_x, dest_y, dest_z) on the bot's map:

@@ -14,7 +14,7 @@
 - `kMaxGroundEffects` 4 -> 8 (in place: the one break of this layout). `Telegraph[4]` with `telegraph_count`: a hostile cast in progress that hits a circle
   or a cone (`Bot.Snapshot.Telegraphs`). `NearbyUnit::aggro_radius` (`Bot.Snapshot.AggroRadius`). `BotSnapshot::role_hint`.
 - Actions: `kStopCast = 33` (`Bot.Actions.StopCast`), `kProbePoint = 34` with `ProbeResult[4]`, `probe_count`, `probe_sequence` and `ProbeFlag`
-  (`Bot.Actions.Probe`, `Bot.Probe.PerTick`), `kTransport = 32` reserved (`Bot.Actions.Transport`, refused until implemented). `kLastActionType = kProbePoint`.
+  (`Bot.Actions.Probe`, `Bot.Probe.PerTick`), `kTransport = 32` (`Bot.Actions.Transport`: spell_id 1 board by entry, 2 leave, 3 join the leader's transport; the core side is in `Trinity-Forever-Modules`, no layout change: `transport_guid` holds the transport's entry, the leader's map, position and transport are in its `PartyMember`). `kLastActionType = kProbePoint`.
 - `Tier2RegionHeader` (56 -> 304 bytes) gains `layout_base`, the party slots, the region geometry (`header_bytes`, `snapshot_bytes`, `action_offset`,
   `action_bytes`, `action_header_bytes`, `action_stride`) and `sections[8]` (`Tier2Section`, `Tier2SectionKind`); `Tier2DescribeRegion` fills them.
   `WorldTickSnapshotHeader` (16 -> 24) gains `party_view_count` and `party_member_count`. Sizes: `BotSnapshot` 1416 -> 1856, `NearbyUnit` 128 -> 136.
