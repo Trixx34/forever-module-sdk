@@ -615,7 +615,8 @@ struct WorldTickSnapshotHeader {
 };
 
 enum class ActionType : std::uint32_t {
-    kCastSpell = 0,
+    kCastSpell = 0, // SDK 0.29 (protocol 28): dest_x >= 1 casts spell_id exactly (that rank), kNotKnown when the bot has not learned it; dest_x 0 (the old
+                    // behaviour) casts the highest rank the bot knows of spell_id's rank group. A core before protocol 28 ignores dest_x. For healer downranking.
     kMoveTo = 1,
     kAttackTarget = 2,
     kFollow = 3,
@@ -665,7 +666,11 @@ enum class ActionType : std::uint32_t {
     kReleaseSpirit = 14, // release the spirit of the dead bot (layout 11): the corpse becomes a ghost at the graveyard. No arguments. Refused
                          // when the bot is alive, already a ghost, being teleported, or in combat.
     kResurrect = 15,     // answer a pending resurrect offer (layout 11). target_guid = the resurrecter's player unit ref (BotSnapshot::resurrect_from);
-                         // spell_id 0 accepts, 1 declines.
+                         // spell_id 0 accepts, 1 declines. SDK 0.29 (protocol 28): spell_id 2 takes the spirit healer: a ghost walks to the nearest spirit
+                         // healer (the core looks within about 40 yards, steps toward it when out of interaction range and answers kMoving) and is resurrected
+                         // there at 50% health with resurrection sickness and a durability loss, as a player would. target_guid is ignored. kRefused when the bot
+                         // is not a ghost or the realm is hardcore; when the map has no spirit healer the core falls back to the old
+                         // corpse reclaim (as kReclaimCorpse). Needs Bot.Actions.SpiritHealer in the core (else kRefused). A core before protocol 28 treats it as a decline.
     kReclaimCorpse = 16, // reclaim the corpse (layout 11): a ghost within the corpse reclaim radius of its corpse, once the reclaim delay is over.
     kSummon = 17,        // a chat order (group of the target): put the bot next to the player target_guid names, a spread position given by the index in
                          // dest_x. Refused for a dead or fighting bot, a speaker who is fighting, an instance involved on another map, or when the bot is

@@ -21,13 +21,15 @@ namespace forever_module {
 // in Tier2RegionHeader). The Tier 1 messages do not change.
 // 26 -> 27 adds the core-to-module BossKilledEvent (EventNotify field 23, hook PlayerScript.OnBossKill), and in layout 25 (no layout bump: the shapes keep their
 // size) ActionResult::reason (was reserved), kQuest operation 5 and kVendor bit 2048. An append: kProtocolBase stays 26, a protocol 26 module is still served.
-inline constexpr char const* kProtocolVersion = "27";
+// 27 -> 28 adds, in layout 25 (no layout bump, append only), kResurrect spell_id 2 (take the spirit healer) and the meaning of BotAction::dest_x >= 1 on
+// kCastSpell (cast spell_id exactly, no rank lookup). kProtocolBase stays 26.
+inline constexpr char const* kProtocolVersion = "28";
 
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire
 // contract. See doc/module-system/11-sdk-scope.md for the full versioning split rationale.
 // Pre-1.0 scheme (forever-ops docs/96-versioning.md): 0.MINOR.PATCH, MINOR for a protocol or layout change or a new capability, PATCH for fixes. The
 // same number is in CMakeLists.txt (project VERSION); the tier1_roundtrip test fails when the two differ.
-inline constexpr char const* kSdkPackageVersion = "0.28.0";
+inline constexpr char const* kSdkPackageVersion = "0.29.0";
 
 } // namespace forever_module

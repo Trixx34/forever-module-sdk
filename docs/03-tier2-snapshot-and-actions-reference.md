@@ -180,7 +180,7 @@ All values, from `tier2_layout.h`. "Switch" is the `worldserver.conf` key the co
 
 | Value | Name | Arguments | Notes and refusals | Switch |
 |---|---|---|---|---|
-| 0 | `kCastSpell` | `spell_id` = spell; `target_guid` = target (0 = self) | Result in the snapshot: `kApplied` means the cast was accepted, it may still fail while it runs. `kUnknownSpell`, `kNotKnown`, `kOutOfRange`, `kOnCooldown`, `kNotEnoughPower`, `kNoLineOfSight`, `kInvalidTarget`, `kBusy`, `kMoving`. | none |
+| 0 | `kCastSpell` | `spell_id` = spell; `target_guid` = target (0 = self) | Result in the snapshot: `kApplied` means the cast was accepted, it may still fail while it runs. Protocol 28: `dest_x` >= 1 casts exactly `spell_id` (that rank), `kNotKnown` when not learned; 0 casts the highest known rank. `kUnknownSpell`, `kNotKnown`, `kOutOfRange`, `kOnCooldown`, `kNotEnoughPower`, `kNoLineOfSight`, `kInvalidTarget`, `kBusy`, `kMoving`. | none |
 | 1 | `kMoveTo` | `dest_x/y/z` | Refused for an invalid map position. `kNoRoute` when the navmesh has no full route: the bot **still walks** to the nearest reachable point. | none |
 | 2 | `kAttackTarget` | `target_guid` | Must be a live hostile unit on the bot's map; `kInvalidTarget` otherwise; `kRefused` with a reason if the core's attack call refuses. Repeating it on a target already being meleed is `kApplied`. | none |
 | 3 | `kFollow` | `target_guid` | `kInvalidTarget` if the target is not a unit on the bot's map or is the bot. Follows at distance 1.0. | none |
@@ -195,7 +195,7 @@ All values, from `tier2_layout.h`. "Switch" is the `worldserver.conf` key the co
 | 12 | `kGrant` | `spell_id` = item entry; `dest_x` = count (at least 1) | Scenarios and tests. Refused for an unknown item, a count outside 1..stack size, or full bags. | **`Bot.Actions.Grant` (default 0)** |
 | 13 | `kAutoGear` | `spell_id` bit 1 = tank (one-hand weapon and shield) | Dresses the bot for its level, uncommon quality at most (`Bot.AutoGear.MaxQuality`). Refused in combat, for a charmed bot, and for an alt. The core's `Bot.Actions.EquipUpgrades` (default 1) gates a second, bag-only mode (wear a carried item that is better); how that mode is encoded in `spell_id` is not in the header, so ask the core's `ModuleBotActions.cpp` (`AutoGearAction`) before using it. | `Bot.Actions.AutoGear` (default 1) |
 | 14 | `kReleaseSpirit` | none | Dead bot becomes a ghost at the graveyard. Refused when alive, already a ghost, being teleported, or in combat. | none |
-| 15 | `kResurrect` | `target_guid` = resurrecter (`BotSnapshot::resurrect_from`); `spell_id` 0 accepts, 1 declines | Answers a pending resurrect offer. | none |
+| 15 | `kResurrect` | `target_guid` = resurrecter (`BotSnapshot::resurrect_from`); `spell_id` 0 accepts, 1 declines, 2 takes the spirit healer (protocol 28) | Answers a pending resurrect offer. | none |
 | 16 | `kReclaimCorpse` | none | A ghost within the reclaim radius of its corpse, once the delay (`reclaim_wait_ms`) is over. | none |
 | 17 | `kSummon` | `target_guid` = player; `dest_x` = spread index | A chat order: puts the bot next to that player. Refused for a dead or fighting bot, a fighting speaker, an instance on another map, or when the bot is within 5 yards already. | **`Bot.Chat.Orders.Enabled` (default 0)** |
 | 18 | `kRevive` | `target_guid` = player | A chat order: resurrects the dead bot at 35 % health next to the player. Refused on a hardcore realm. | **`Bot.Chat.Orders.Enabled`** |

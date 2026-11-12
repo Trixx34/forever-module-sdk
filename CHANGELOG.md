@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: protocol 28, spirit healer resurrect, exact spell rank in kCastSpell (SDK 0.29.0)
+
+- Protocol `"27"` -> `"28"`, an append: `kProtocolBase`/`kTier2LayoutBase` stay 26/25 and older modules are still served. Layout stays 25.
+- `kResurrect` spell_id 2: take the spirit healer (a ghost walks to the nearest spirit healer and is resurrected there with sickness and a durability loss). Core key
+  `Bot.Actions.SpiritHealer`; with no spirit healer on the map the core falls back to the corpse reclaim.
+- `kCastSpell` with `dest_x >= 1`: cast `spell_id` exactly (that rank), `kNotKnown` when the bot has not learned it. 0 keeps the highest-known-rank behaviour.
+- A core before protocol 28 ignores both (spell_id 2 is a decline, dest_x is ignored).
+
 ## Unreleased: protocol 27, boss-kill event, quest start from an item or object, action refusal reasons, outclassed-gear sale (SDK 0.28.0)
 
 - Protocol `"26"` -> `"27"`, an append: `kProtocolBase`/`kTier2LayoutBase` stay 26/25 and a protocol 26 module is still served. Layout stays 25 (no size or offset changes).

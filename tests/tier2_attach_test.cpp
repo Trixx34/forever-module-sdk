@@ -342,6 +342,19 @@ int main()
         revive.target_guid = MakeUnitRef(2, 0, 7);
         CHECK(session->PublishActions({revive}, actionError));
 
+        // Protocol 28: kResurrect spell_id 2 (the spirit healer) and an exact-rank cast (dest_x >= 1) are plain actions inside layout 25.
+        BotAction spiritHealer;
+        spiritHealer.bot_guid = 42;
+        spiritHealer.type = ActionType::kResurrect;
+        spiritHealer.spell_id = 2;
+        BotAction exactRank;
+        exactRank.bot_guid = 42;
+        exactRank.type = ActionType::kCastSpell;
+        exactRank.spell_id = 2050;
+        exactRank.target_guid = MakeUnitRef(2, 0, 7);
+        exactRank.dest_x = 1.0f;
+        CHECK(session->PublishActions({spiritHealer, exactRank}, actionError));
+
         BotAction reclaim;
         reclaim.bot_guid = 42;
         reclaim.type = ActionType::kReclaimCorpse;
