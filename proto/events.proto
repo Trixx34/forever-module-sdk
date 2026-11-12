@@ -125,6 +125,17 @@ message GroupInviteDeclinedEvent {
   optional uint64 decliner_guid = 2;
 }
 
+// A dungeon boss died to a player, or to a pet or charm of one (protocol 27). Guids are raw counters; group_leader_guid is 0 when the killer has no group.
+// A bots module links it to its dungeon run (the run's group leader and map). dungeon_boss is 1 for a CREATURE_FLAG_EXTRA_DUNGEON_BOSS creature.
+message BossKilledEvent {
+  optional uint32 map_id = 1;
+  optional uint32 instance_id = 2;
+  optional uint32 creature_entry = 3;
+  optional uint64 killer_guid = 4;
+  optional uint64 group_leader_guid = 5;
+  optional uint32 dungeon_boss = 6;
+}
+
 // Fire-and-forget event dispatch (core -> module). Core never blocks on these.
 message EventNotify {
   optional string hook_name = 1;
@@ -142,6 +153,7 @@ message EventNotify {
     GuildMemberLevelEvent guild_member_level = 20; // protocol 21; hook GuildScript.OnMemberLevel
     LfgQueueEvent lfg_queue = 21;                  // protocol 21; hook LfgScript.OnQueueUpdate
     GroupInviteDeclinedEvent group_invite_declined = 22; // protocol 22; hook GroupScript.OnInviteDeclined
+    BossKilledEvent boss_killed = 23;                    // protocol 27; hook PlayerScript.OnBossKill
   }
 }
 

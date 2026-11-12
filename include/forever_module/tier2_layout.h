@@ -187,13 +187,31 @@ struct DamageHit {
     std::uint32_t sequence = 0;
 };
 
+// Layout 25 (in the reserved space, no size change): why an action was refused, in ActionResult::reason. 0 = no reason given (applied, or a refusal the core
+// does not classify: see its log). A core that predates this writes 0 there, so a module treats 0 as "unknown". Classified for kQuest operation 1 (accept):
+// the first check of Player::CanTakeQuest that fails, in its order.
+enum class ActionReason : std::uint16_t {
+    kNone = 0,
+    kLevelTooLow = 1,         // the quest's minimum level is above the bot's
+    kLevelTooHigh = 2,        // the bot is above the quest's maximum level
+    kWrongClassOrRace = 3,    // the quest is for another class or race
+    kPrerequisite = 4,        // a previous quest, a breadcrumb or an exclusive group is not satisfied
+    kLogFull = 5,             // the quest log has no room
+    kAlreadyDone = 6,         // the quest is rewarded already (or a daily, weekly, monthly or seasonal one is done for its period)
+    kAlreadyOnQuest = 7,      // the quest is in the log
+    kSkillOrReputation = 8,   // a skill or reputation requirement is not met
+    kBagsFull = 9,            // the quest's source item (or the reward) does not fit in the bags
+    kNoGiver = 10,            // no giver or ender in interaction range
+    kOther = 11,              // refused for a reason the core does not split further (conditions, expansion, disabled quest, timed)
+};
+
 // Layout 24: the result of one applied action, for the ring in BotSnapshot::results. type is the ActionType, status a BotActionStatus (as its integer value).
 inline constexpr std::size_t kMaxActionResults = 4;
 inline constexpr std::size_t kMaxTargetAuras = 8;
 struct ActionResult {
     std::uint8_t type = 0;
     std::uint8_t status = 0;
-    std::uint16_t reserved = 0;
+    std::uint16_t reason = 0;                // an ActionReason (layout 25: was reserved, 0 stays "none")
     std::uint32_t spell_id = 0;
     std::uint32_t sequence = 0;
 };
@@ -616,6 +634,10 @@ enum class ActionType : std::uint32_t {
                  // SDK 0.16: 1024 also sells white junk with the grey items of bit 1 (or alone): spare bags, miscellaneous items, and the surplus of trade
                  // goods (a bot keeps 60 pieces of each kind, for First Aid, Cooking or the auction house). Never a quest item, an equipped bag, a
                  // consumable, a reagent, ammunition, a weapon or armour. Meant for a bot whose bags are nearly full.
+                 // SDK 0.28: 2048 sells the bag gear the bot's worn gear outclasses (needs Bot.Vendor.SellGear in the core, else kRefused). The rule: green or
+                 // lower, usable, required level reached, not a quest or set item, every slot of that type worn by an item of the same inventory type with an
+                 // item level at least as high and a gear score 30 higher, never heavier body armour than worn. By the numbers, never by item id. Bits 12-14 of
+                 // spell_id carry the gear profile (AutoGearAction's profile 0-6) whose stat list scores the items. The core logs vendor_sell_gear.
     kTrain = 7,  // learn every spell the trainer in interaction range teaches this bot now (M4). Refused in combat.
     kGroup = 8,  // party actions (M8). spell_id 1 invites the bot named by target_guid, 2 accepts the bot's pending invite,
                  // 3 leaves the bot's party. Refused in combat.
@@ -636,6 +658,10 @@ enum class ActionType : std::uint32_t {
     kQuest = 10, // quest actions at an NPC within interaction range (M5). spell_id = (operation << 24) | quest id, with operation 1 =
                  // accept the quest from a giver, 2 = hand it in at an ender (the core picks the reward item), 3 = abandon it
                  // (no NPC needed). Accept and hand-in are refused in combat.
+                 // SDK 0.28: 4 completes it with its reward and no objectives, anywhere; 5 starts it from the quest-starting item the bot carries (the item
+                 // is used and spent as the game does) or, with no such item, from the game object whose entry is target_guid within interaction range:
+                 // for the quests that have no creature giver (the Onyxia attunement chain). kRefused with ActionResult::reason kNoGiver when neither is there.
+                 // A refused accept (1 or 5) carries an ActionReason in ActionResult::reason (level, class or race, prerequisite, log full, already done...).
     kReleaseSpirit = 14, // release the spirit of the dead bot (layout 11): the corpse becomes a ghost at the graveyard. No arguments. Refused
                          // when the bot is alive, already a ghost, being teleported, or in combat.
     kResurrect = 15,     // answer a pending resurrect offer (layout 11). target_guid = the resurrecter's player unit ref (BotSnapshot::resurrect_from);

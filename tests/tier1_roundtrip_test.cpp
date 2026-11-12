@@ -1441,6 +1441,13 @@ Failures RunProtocol21Scenario()
         declined->mutable_group_invite_declined()->set_inviter_guid(11);
         declined->mutable_group_invite_declined()->set_decliner_guid(12);
         EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        EventNotify* boss = out.mutable_event_notify();
+        boss->set_hook_name("PlayerScript.OnBossKill");
+        boss->mutable_boss_killed()->set_map_id(409);
+        boss->mutable_boss_killed()->set_creature_entry(12118);
+        boss->mutable_boss_killed()->set_group_leader_guid(77);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
 
         out.Clear();
         out.mutable_shutdown()->set_reason("test");
@@ -1453,11 +1460,11 @@ Failures RunProtocol21Scenario()
     ModuleManifest manifest;
     manifest.module_name = "p21-module";
     manifest.module_version = "0.0.1";
-    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined"};
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined", "PlayerScript.OnBossKill"};
     manifest.heartbeat_interval = 20ms;
     ModuleClient client(manifest);
     int replies = 0;
-    bool gotLevel = false, gotLfg = false, gotDeclined = false;
+    bool gotLevel = false, gotLfg = false, gotDeclined = false, gotBoss = false;
     client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
     {
         auto count = [&](ActionReply const& r) { if (r.success()) ++replies; };
@@ -1482,6 +1489,11 @@ Failures RunProtocol21Scenario()
         GroupInviteDeclinedEvent const& e = n.group_invite_declined();
         gotDeclined = e.inviter_guid() == 11 && e.decliner_guid() == 12;
     });
+    client.OnNotify("PlayerScript.OnBossKill", [&](EventNotify const& n)
+    {
+        BossKilledEvent const& e = n.boss_killed();
+        gotBoss = e.map_id() == 409 && e.creature_entry() == 12118 && e.group_leader_guid() == 77;
+    });
     EXPECT_IN(clientFails, client.Connect(path));
     EXPECT_IN(clientFails, client.Handshake(2000ms));
     client.Run();
@@ -1490,6 +1502,7 @@ Failures RunProtocol21Scenario()
     EXPECT_IN(clientFails, replies == 4);
     EXPECT_IN(clientFails, gotLevel);
     EXPECT_IN(clientFails, gotDeclined);
+    EXPECT_IN(clientFails, gotBoss);
     EXPECT_IN(clientFails, gotLfg);
 
     Failures all = clientFails;

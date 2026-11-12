@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased: protocol 27, boss-kill event, quest start from an item or object, action refusal reasons, outclassed-gear sale (SDK 0.28.0)
+
+- Protocol `"26"` -> `"27"`, an append: `kProtocolBase`/`kTier2LayoutBase` stay 26/25 and a protocol 26 module is still served. Layout stays 25 (no size or offset changes).
+- Event `BossKilledEvent boss_killed = 23` (`map_id`, `instance_id`, `creature_entry`, `killer_guid`, `group_leader_guid`, `dungeon_boss`), hook
+  `PlayerScript.OnBossKill`: a dungeon boss died to a player, a pet or a charm. For the bots module's dungeon-run link.
+- `ActionResult::reason` (the old `reserved` 16 bits) and `ActionReason`: why a quest accept or start was refused (level too low or high, class or race, prerequisite,
+  log full, already done, already on it, skill or reputation, bags full, no giver, other). 0 from a core that predates it.
+- `kQuest` operation 5 and `ModuleClient::QuestStartFromItemOrObject`: start a quest from the quest-starting item the bot carries, or from the game object whose entry
+  is `target_guid` (quests with no creature giver, e.g. the Onyxia attunement). Operation 4 is documented.
+- `kVendor` bit 2048 (+ gear profile in bits 12-14): sell outclassed bag gear, core key `Bot.Vendor.SellGear` (default 0).
+- The core side is in `Trinity-Forever-Modules` branch `feature/todo-core2`.
+
 ## Unreleased: protocol 26, the party view and enemy telegraphs, layout 25 (SDK 0.27.0)
 
 - Protocol `"25"` -> `"26"`; layout `25`, base `25` (`kTier2LayoutBase`, the growth rule in `tier2_layout.h`: from here on fields are appended, a module reads a

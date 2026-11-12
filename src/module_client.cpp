@@ -820,6 +820,19 @@ void ModuleClient::QuestAccept(std::uint64_t botGuid, std::uint32_t questId, Act
     PublishBotAction(action);
 }
 
+void ModuleClient::QuestStartFromItemOrObject(std::uint64_t botGuid, std::uint32_t questId, std::uint32_t objectEntry, ActionCallback onReply)
+{
+    (void)onReply;
+    if (!CheckQuestId(questId))
+        return;
+    BotAction action;
+    action.bot_guid = botGuid;
+    action.type = ActionType::kQuest;
+    action.spell_id = (5u << 24) | questId; // operation 5 = start from an item or an object
+    action.target_guid = objectEntry;
+    PublishBotAction(action);
+}
+
 void ModuleClient::QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply)
 {
     (void)onReply;

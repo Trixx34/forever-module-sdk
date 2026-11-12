@@ -299,6 +299,9 @@ public:
     void QuestAccept(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply = nullptr);
     void QuestTurnIn(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply = nullptr);
     void QuestAbandon(std::uint64_t botGuid, std::uint32_t questId, ActionCallback onReply = nullptr);
+    // SDK 0.28: starts a quest that has no creature giver: from the quest-starting item the bot carries, else from the game object with entry objectEntry within
+    // interaction range (0: item only). A refusal comes back in the result's reason (ActionReason::kNoGiver and the accept reasons).
+    void QuestStartFromItemOrObject(std::uint64_t botGuid, std::uint32_t questId, std::uint32_t objectEntry = 0, ActionCallback onReply = nullptr);
     void Teleport(std::uint64_t botGuid, std::uint32_t mapId, float x, float y, float z,
                   ActionCallback onReply = nullptr);
     void Grant(std::uint64_t botGuid, std::uint32_t itemEntry, std::uint32_t count = 1,

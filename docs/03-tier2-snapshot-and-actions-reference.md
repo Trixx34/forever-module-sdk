@@ -190,7 +190,7 @@ All values, from `tier2_layout.h`. "Switch" is the `worldserver.conf` key the co
 | 7 | `kTrain` | none | Learns every spell the trainer in range teaches this bot now. Refused in combat, with no trainer in range, when the trainer teaches nothing, or a profession outside the bot's pair. | none |
 | 8 | `kGroup` | `spell_id` 1 invite `target_guid`, 2 accept the pending invite, 3 leave, 4 convert own party to raid, 5 move `target_guid` to subgroup `dest_x` (0 to 7) | Refused in combat. Invite: the target must be a bot **this module controls**, the bot must be (or becomes) the leader, same team, party not full. 4 and 5: leader/assistant only, group must be a raid for 5. | none |
 | 9 | `kLoot` | `target_guid` = corpse | Takes every item the bot may and the money. The corpse must be dead, within 30 yards, and one the bot may loot. An empty corpse is not an error. | none |
-| 10 | `kQuest` | `spell_id` = `(operation << 24) \| quest id`; operation 1 accept, 2 hand in, 3 abandon | Quest ids must fit 24 bits (`ModuleClient::QuestAccept` etc. refuse larger ones). Accept and hand-in need the giver/ender in range and are refused in combat; abandon needs no NPC. | none |
+| 10 | `kQuest` | `spell_id` = `(operation << 24) \| quest id`; operation 1 accept, 2 hand in, 3 abandon, 4 complete with reward (anywhere), **5 start from a carried quest item or from a game object whose entry is `target_guid`** (SDK 0.28) | Quest ids must fit 24 bits (`ModuleClient::QuestAccept` etc. refuse larger ones). Accept and hand-in need the giver/ender in range and are refused in combat; abandon needs no NPC. Operation 5 (`ModuleClient::QuestStartFromItemOrObject`) is for quests with no creature giver: it uses the item whose template starts the quest (spent as the game does), else the object within interaction range; neither present is `kRefused` with reason `kNoGiver`. A refused accept carries an `ActionReason` (see below). | none |
 | 11 | `kTeleport` | `spell_id` = map; `dest_x/y/z` | Scenarios and tests. Refused in combat. A bot in a party enters the party's instance. | **`Bot.Actions.Teleport` (default 0)** |
 | 12 | `kGrant` | `spell_id` = item entry; `dest_x` = count (at least 1) | Scenarios and tests. Refused for an unknown item, a count outside 1..stack size, or full bags. | **`Bot.Actions.Grant` (default 0)** |
 | 13 | `kAutoGear` | `spell_id` bit 1 = tank (one-hand weapon and shield) | Dresses the bot for its level, uncommon quality at most (`Bot.AutoGear.MaxQuality`). Refused in combat, for a charmed bot, and for an alt. The core's `Bot.Actions.EquipUpgrades` (default 1) gates a second, bag-only mode (wear a carried item that is better); how that mode is encoded in `spell_id` is not in the header, so ask the core's `ModuleBotActions.cpp` (`AutoGearAction`) before using it. | `Bot.Actions.AutoGear` (default 1) |
@@ -228,6 +228,7 @@ declaration, are what the wire carries.
 | 9 | `256` | Buy bandages up to `Bot.Supplies.BandageTarget`. |
 | 10 | `512` | Buy the reagent the snapshot names (`reagent_entry`) up to `Bot.Supplies.ReagentTarget` pieces. |
 | 11 | `1024` | Also sell white junk with the grey items (spare bags, miscellaneous items, the surplus of trade goods beyond 60 of a kind); never quest items, equipped bags, consumables, reagents, ammunition, weapons or armour. |
+| 12 | `2048` | **Sell outclassed bag gear** (SDK 0.28): green or lower, usable, required level reached, not a quest or set item, every slot of its type worn by an item of the same inventory type with an item level at least as high and a gear score 30 higher; never heavier armour than worn; by the numbers, never by item id. Bits 12-14 of `spell_id` carry the gear profile (0-6, as in `kAutoGear`). Needs `Bot.Vendor.SellGear` in the core (default 0: refused). The core logs `vendor_sell_gear`. |
 
 The core picks the item from the vendor's stock (ammunition the bot's weapon takes; the best food or drink usable at the bot's level) and buys until the bot
 carries the target or its money or bags run out; a vendor without the goods is not an error. The core keeps a money reserve (`Bot.Supplies.ReserveCopperPerLevel`
@@ -277,7 +278,15 @@ for that bot; a different value is a new result. If you send several actions for
 | 13 | `kNoRoute` | A move: no full navmesh route; the bot walks to the nearest reachable point and stops (the move is still applied). Only for `kMoveTo`. |
 | 14 | `kNeedsFocus` | A craft or cast needs a spell focus object (anvil, forge, cooking fire) within reach and there is none; walk to one and retry. Distinct from `kRefused`. |
 
-The **reason text** of a refusal is not in the snapshot; only the status code is. The reason is in the core's log (`modules` debug lines, and the once-a-minute
+**Why an action was refused (SDK 0.28, `ActionResult::reason`).** The ring `BotSnapshot::results[i]` carries a 16-bit `reason`, an `ActionReason`, next to `status`
+(it sat in reserved space: no size or offset changed, so no layout bump; a core before this writes 0, which reads as "none/unknown"). It is set for a refused
+`kQuest` accept or start (operations 1 and 5) and the other quest refusals that have a code: 0 `kNone`, 1 `kLevelTooLow`, 2 `kLevelTooHigh`, 3 `kWrongClassOrRace`,
+4 `kPrerequisite` (a previous quest, breadcrumb or exclusive group), 5 `kLogFull`, 6 `kAlreadyDone` (rewarded, or the daily/weekly/monthly/seasonal period is done),
+7 `kAlreadyOnQuest`, 8 `kSkillOrReputation`, 9 `kBagsFull`, 10 `kNoGiver` (no giver, ender, item or object in reach), 11 `kOther` (conditions, expansion, disabled,
+timed). The first failing check of the core's `CanTakeQuest`, in its order, wins. Block a quest per reason on the module side: `kLevelTooLow` is worth retrying
+after a level, `kWrongClassOrRace` and `kAlreadyDone` never. `last_action_*` still mirrors `results[0]` and has no reason field: read `results[0].reason`.
+
+The **reason text** of a refusal is not in the snapshot; only the status code (and, for quests, the code above) is. The reason is in the core's log (`modules` debug lines, and the once-a-minute
 `Modules: N action(s) refused ...` summary). Tier 1 actions are different: their `ActionReply` carries `success` and a `reason` string.
 
 ## Tier 1 actions in short
