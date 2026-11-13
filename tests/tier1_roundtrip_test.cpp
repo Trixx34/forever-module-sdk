@@ -1070,13 +1070,14 @@ Failures RunBotTradeScenario()
     ModuleManifest manifest;
     manifest.module_name = "bot-trade-module";
     manifest.module_version = "0.0.1";
-    manifest.tier1_hooks = {"WorldScript.OnStartup", "PlayerScript.OnBotTrade"};
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "PlayerScript.OnBotTrade", "PlayerScript.OnDamaged"};
     manifest.heartbeat_interval = 20ms;
     ModuleClient client(manifest);
     bool gotSpeakReply = false;
     bool gotBags = false;
     bool gotSetReply = false;
     bool gotEvent = false;
+    bool gotDamage = false;
     client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
     {
         client.BotSpeak(42, ModuleClient::SpeakKind::kWhisper, 7, "Hello", [&](ActionReply const& r) { gotSpeakReply = r.success(); });
@@ -1107,6 +1108,7 @@ Failures RunBotTradeScenario()
     EXPECT_IN(clientFails, gotBags);
     EXPECT_IN(clientFails, gotSetReply);
     EXPECT_IN(clientFails, gotEvent);
+    EXPECT_IN(clientFails, gotDamage);
 
     Failures all = clientFails;
     all.insert(all.end(), coreFails.begin(), coreFails.end());
@@ -1479,11 +1481,11 @@ Failures RunProtocol21Scenario()
     ModuleManifest manifest;
     manifest.module_name = "p21-module";
     manifest.module_version = "0.0.1";
-    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined", "PlayerScript.OnBossKill", "PlayerScript.OnDamaged"};
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined", "PlayerScript.OnBossKill"};
     manifest.heartbeat_interval = 20ms;
     ModuleClient client(manifest);
     int replies = 0;
-    bool gotLevel = false, gotLfg = false, gotDeclined = false, gotBoss = false, gotDamage = false;
+    bool gotLevel = false, gotLfg = false, gotDeclined = false, gotBoss = false;
     client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
     {
         auto count = [&](ActionReply const& r) { if (r.success()) ++replies; };
@@ -1522,7 +1524,6 @@ Failures RunProtocol21Scenario()
     EXPECT_IN(clientFails, gotLevel);
     EXPECT_IN(clientFails, gotDeclined);
     EXPECT_IN(clientFails, gotBoss);
-    EXPECT_IN(clientFails, gotDamage);
     EXPECT_IN(clientFails, gotLfg);
 
     Failures all = clientFails;
