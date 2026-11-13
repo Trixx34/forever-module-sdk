@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased: protocol 29, the damage event (SDK 0.30.0)
+
+- Protocol `"28"` -> `"29"`, an append: `kProtocolBase`/`kTier2LayoutBase` stay 26/25, a protocol 26 to 28 module is still served. Layout stays 25.
+- Event `PlayerDamagedEvent player_damaged = 24`, hook `PlayerScript.OnDamaged`: damage a bot took (victim, attacker guid and creature entry, spell id (0 = melee), school,
+  amount after absorb/resist, overkill, killing blow, health after, position). The core sends killing blows and hits of at least
+  `Modules.DamageEvent.MinPct` percent (default 20) of the victim's max health, every hit when `Modules.DamageEvent.All = 1`, and at most
+  `Modules.DamageEvent.MaxPerSecond` (default 200) a second per module. Receive it with `ModuleClient::OnNotify("PlayerScript.OnDamaged", cb)` and `n.player_damaged()`.
+- A core before protocol 29 refuses the hook in the manifest (the handshake fails), so list it only for a module built for protocol 29.
+
 ## Unreleased: protocol 28, spirit healer resurrect, exact spell rank in kCastSpell (SDK 0.29.0)
 
 - Protocol `"27"` -> `"28"`, an append: `kProtocolBase`/`kTier2LayoutBase` stay 26/25 and older modules are still served. Layout stays 25.

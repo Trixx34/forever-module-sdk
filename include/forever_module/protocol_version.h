@@ -23,13 +23,15 @@ namespace forever_module {
 // size) ActionResult::reason (was reserved), kQuest operation 5 and kVendor bit 2048. An append: kProtocolBase stays 26, a protocol 26 module is still served.
 // 27 -> 28 adds, in layout 25 (no layout bump, append only), kResurrect spell_id 2 (take the spirit healer) and the meaning of BotAction::dest_x >= 1 on
 // kCastSpell (cast spell_id exactly, no rank lookup). kProtocolBase stays 26.
-inline constexpr char const* kProtocolVersion = "28";
+// 28 -> 29 adds the core-to-module PlayerDamagedEvent (EventNotify field 24, hook PlayerScript.OnDamaged): the real damage source of a bot's big hits and
+// deaths, rate limited in the core. Tier 1 only, layout 25 unchanged, kProtocolBase stays 26.
+inline constexpr char const* kProtocolVersion = "29";
 
 // sdk_package_version is this SDK repo's own release tag (client lib code, build scripts, docs).
 // Can bump independently of kProtocolVersion for bugfixes/improvements that don't change the wire
 // contract. See doc/module-system/11-sdk-scope.md for the full versioning split rationale.
 // Pre-1.0 scheme (forever-ops docs/96-versioning.md): 0.MINOR.PATCH, MINOR for a protocol or layout change or a new capability, PATCH for fixes. The
 // same number is in CMakeLists.txt (project VERSION); the tier1_roundtrip test fails when the two differ.
-inline constexpr char const* kSdkPackageVersion = "0.29.0";
+inline constexpr char const* kSdkPackageVersion = "0.30.0";
 
 } // namespace forever_module

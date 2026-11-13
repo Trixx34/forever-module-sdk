@@ -195,3 +195,8 @@ A module subscribes to hooks by listing them in the manifest; the core delivers 
 and `OnRequest(hook, cb)` register the handlers, keyed by the hook name; an `EventRequest` with no handler is answered with an empty reply so the core does
 not wait. The payload messages are in `proto/events.proto` (for example `PlayerItemLootedEvent`, `PlayerChatEvent`, `CommandRequestPayload`). Registering a
 handler for a hook you did not list in the manifest receives nothing, and listing a hook the core does not support fails the handshake.
+
+**Damage event (protocol 29).** `PlayerScript.OnDamaged` delivers a `PlayerDamagedEvent` when a bot takes a killing blow or a hit of at least
+`Modules.DamageEvent.MinPct` percent (default 20) of its maximum health (every hit with `Modules.DamageEvent.All = 1`), at most `Modules.DamageEvent.MaxPerSecond`
+events a second per module (default 200, the rest dropped). It carries the real attacker (`attacker_guid`, `attacker_entry`), `spell_id` (0 for a melee swing), the school,
+the damage after absorb and resist, the overkill, and the victim's health and position. Use it to tell what killed a bot; small hits are not sent, so it is not a damage meter.

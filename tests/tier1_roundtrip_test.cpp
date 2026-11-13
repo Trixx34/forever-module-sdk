@@ -1044,6 +1044,20 @@ Failures RunBotTradeScenario()
         offered->set_entry(2589);
         offered->set_count(5);
         EXPECT_IN(coreFails, WriteEnvelope(socket, out));
+        out.Clear();
+        EventNotify* dmg = out.mutable_event_notify();
+        dmg->set_hook_name("PlayerScript.OnDamaged");
+        PlayerDamagedEvent* hit = dmg->mutable_player_damaged();
+        hit->set_victim_guid(42);
+        hit->set_attacker_guid(9001);
+        hit->set_attacker_entry(11502);
+        hit->set_spell_id(20566);
+        hit->set_school(4);
+        hit->set_amount(3100);
+        hit->set_overkill(250);
+        hit->set_killing_blow(true);
+        hit->set_x(1.5f);
+        EXPECT_IN(coreFails, WriteEnvelope(socket, out));
 
         out.Clear();
         out.mutable_shutdown()->set_reason("test");
@@ -1078,6 +1092,11 @@ Failures RunBotTradeScenario()
         BotTradeEvent const& event = notify.bot_trade();
         gotEvent = event.bot_guid() == 42 && event.partner_guid() == 7 && event.status() == 3 && event.partner_copper() == 150 &&
                    event.offered_size() == 1 && event.offered(0).slot() == 0 && event.offered(0).entry() == 2589 && event.offered(0).count() == 5;
+    });
+    client.OnNotify("PlayerScript.OnDamaged", [&](EventNotify const& n)
+    {
+        PlayerDamagedEvent const& e = n.player_damaged();
+        gotDamage = e.victim_guid() == 42 && e.attacker_entry() == 11502 && e.spell_id() == 20566 && e.amount() == 3100 && e.overkill() == 250 && e.killing_blow();
     });
     EXPECT_IN(clientFails, client.Connect(path));
     EXPECT_IN(clientFails, client.Handshake(2000ms));
@@ -1460,11 +1479,11 @@ Failures RunProtocol21Scenario()
     ModuleManifest manifest;
     manifest.module_name = "p21-module";
     manifest.module_version = "0.0.1";
-    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined", "PlayerScript.OnBossKill"};
+    manifest.tier1_hooks = {"WorldScript.OnStartup", "GuildScript.OnMemberLevel", "LfgScript.OnQueueUpdate", "GroupScript.OnInviteDeclined", "PlayerScript.OnBossKill", "PlayerScript.OnDamaged"};
     manifest.heartbeat_interval = 20ms;
     ModuleClient client(manifest);
     int replies = 0;
-    bool gotLevel = false, gotLfg = false, gotDeclined = false, gotBoss = false;
+    bool gotLevel = false, gotLfg = false, gotDeclined = false, gotBoss = false, gotDamage = false;
     client.OnNotify("WorldScript.OnStartup", [&](EventNotify const&)
     {
         auto count = [&](ActionReply const& r) { if (r.success()) ++replies; };
@@ -1503,6 +1522,7 @@ Failures RunProtocol21Scenario()
     EXPECT_IN(clientFails, gotLevel);
     EXPECT_IN(clientFails, gotDeclined);
     EXPECT_IN(clientFails, gotBoss);
+    EXPECT_IN(clientFails, gotDamage);
     EXPECT_IN(clientFails, gotLfg);
 
     Failures all = clientFails;

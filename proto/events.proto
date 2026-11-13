@@ -4,8 +4,8 @@ package forever_module;
 
 // Tier 1 event payloads for the v1 hook subset only (doc/module-system/03-phase1-protocol-design.md,
 // "Initial hook subset (v1)"): PlayerScript::OnLogin/OnLogout, AccountScript::OnAccountLogin,
-// WorldScript::OnStartup/OnShutdown, CommandScript, PlayerScript::OnLootItem, PlayerScript::OnChat. Damage/heal/aura/level/quest hooks are
-// deliberately absent and are added only after the Phase 3 end-to-end walkthrough (doc 03).
+// WorldScript::OnStartup/OnShutdown, CommandScript, PlayerScript::OnLootItem, PlayerScript::OnChat. Damage/heal/aura/level/quest hooks were
+// absent at first and are added one at a time; the only damage hook is PlayerScript.OnDamaged (protocol 29, bot victims, rate limited).
 // See doc/module-system/08-forever-bot-migration-gap-analysis.md for the full hook mapping.
 
 message PlayerLoginEvent {
@@ -136,6 +136,30 @@ message BossKilledEvent {
   optional uint32 dungeon_boss = 6;
 }
 
+// Damage a bot took (protocol 29, hook PlayerScript.OnDamaged). Sent for a Player victim that is a bot, after absorbs, resists and script changes, just before the
+// damage is applied. The core sends only killing blows and hits of at least Modules.DamageEvent.MinPct percent of the victim's maximum health (default 20), every hit
+// when Modules.DamageEvent.All is 1, and at most Modules.DamageEvent.MaxPerSecond events a second per module (default 200; the rest are dropped and counted in the core log).
+// Guids are raw counters (the same convention as BossKilledEvent). attacker_entry is the creature entry (0 for a player, a pet of a player, or no attacker).
+// spell_id is 0 for a melee or ranged auto-attack. school is the SpellSchoolMask. amount is the damage applied (after absorb/resist), overkill the part beyond the
+// victim's remaining health (0 unless killing_blow). Absorb and resist are not carried (the core sees the damage after them; fields 8 and 9 are unused). victim_health_after is 0 for a killing blow.
+message PlayerDamagedEvent {
+  optional uint64 victim_guid = 1;
+  optional uint64 attacker_guid = 2;
+  optional uint32 attacker_entry = 3;
+  optional uint32 spell_id = 4;
+  optional uint32 school = 5;
+  optional uint32 amount = 6;
+  optional uint32 overkill = 7;
+  optional bool killing_blow = 10;
+  optional uint32 victim_health_after = 11;
+  optional uint32 victim_max_health = 12;
+  optional uint32 map_id = 13;
+  optional float x = 14;
+  optional float y = 15;
+  optional float z = 16;
+  optional uint32 attacker_type = 17; // 0 none, 1 creature (a pet or totem is a creature), 2 player, 3 other
+}
+
 // Fire-and-forget event dispatch (core -> module). Core never blocks on these.
 message EventNotify {
   optional string hook_name = 1;
@@ -154,6 +178,7 @@ message EventNotify {
     LfgQueueEvent lfg_queue = 21;                  // protocol 21; hook LfgScript.OnQueueUpdate
     GroupInviteDeclinedEvent group_invite_declined = 22; // protocol 22; hook GroupScript.OnInviteDeclined
     BossKilledEvent boss_killed = 23;                    // protocol 27; hook PlayerScript.OnBossKill
+    PlayerDamagedEvent player_damaged = 24;              // protocol 29; hook PlayerScript.OnDamaged
   }
 }
 
