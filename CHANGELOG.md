@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: item facts in the loot event (protocol stays 29)
+
+- `PlayerItemLootedEvent` gains optional fields 9 to 14: `required_level`, `inventory_type`, `bound`, `upgrade_score` (the core's `BotGearUpgradeScore` for the
+  receiving player, as in `AuctionListingEvent`), `usable` (class, race and skill allow it, the level aside) and `source` (0 loot window, 1 crafted, 2 quest
+  reward, 3 auction mail). Additive within protocol 29: a core before them leaves them out (test `has_upgrade_score()`), a module before them skips them.
+- Sources 1 to 3 arrive on the same hook `PlayerScript.OnLootItem`, for bots only and only when the core's `Modules.ItemReceivedEvent.Enabled` is 1 (default 0),
+  so a module that does not read `source` sees no change.
+
 ## Unreleased: protocol 29, the damage event (SDK 0.30.0)
 
 - Protocol `"28"` -> `"29"`, an append: `kProtocolBase`/`kTier2LayoutBase` stay 26/25, a protocol 26 to 28 module is still served. Layout stays 25.

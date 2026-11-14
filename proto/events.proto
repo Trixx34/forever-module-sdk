@@ -16,7 +16,8 @@ message PlayerLogoutEvent {
   optional uint64 player_guid = 1;
 }
 
-// PlayerScript::OnLootItem, sent after an item from a loot window was stored in the player's bags.
+// PlayerScript::OnLootItem, sent after an item from a loot window was stored in the player's bags (and, with source set, after a bot received an
+// item another way: see source).
 // sell_price is per item, in copper, from the item template (0 if the item cannot be sold).
 message PlayerItemLootedEvent {
   optional uint64 player_guid = 1;
@@ -27,6 +28,17 @@ message PlayerItemLootedEvent {
   optional uint32 item_class = 6;
   optional uint32 sell_price = 7;
   optional string item_name = 8;  // default-locale name, for player-facing messages
+  // Item facts (protocol 29, additive: a core before them leaves them out, so test has_upgrade_score() before relying on them). Worked out for the
+  // receiving player when the event is raised.
+  optional uint32 required_level = 9;   // the item's required level (Item::GetRequiredLevel), 0 when none
+  optional uint32 inventory_type = 10;  // the game's InventoryType: where it is worn (0 = not equippable)
+  optional bool bound = 11;             // soulbound now: it cannot be traded or listed
+  optional uint32 upgrade_score = 12;   // how much better than what the player wears there (BotGearUpgradeScore, as AuctionListingEvent.upgrade_score);
+                                        // 0 = not an upgrade it would wear now (also: a level it has not reached)
+  optional bool usable = 13;            // its class, race and skills allow it, the required level aside
+  // How the item reached the bags: 0 a loot window (PlayerScript::OnLootItem), 1 crafted (a create-item spell), 2 a quest reward, 3 taken from auction
+  // mail (a bought item, or an expired listing back). 1 to 3 are sent for bots only, and only when the core's Modules.ItemReceivedEvent.Enabled is 1.
+  optional uint32 source = 14;
 }
 
 // PlayerScript::OnChat, sent for a line a group leader says in party or raid chat to a group that has a bot in it, and for a whisper to a
