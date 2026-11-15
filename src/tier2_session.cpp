@@ -62,6 +62,23 @@ void CopySection(std::vector<T>& out, std::byte const* first, std::size_t stride
         std::memcpy(static_cast<void*>(&out[i]), first + i * stride, sizeof(T));
 }
 
+// The nearby units of every bot: `maxNearby` slots per bot, of which only the first nearby_count are copied. `stride` is the core's element size.
+void CopyNearby(std::vector<NearbyUnit>& out, std::vector<BotSnapshot> const& bots, std::byte const* first, std::size_t stride, std::size_t count,
+                std::size_t maxNearby)
+{
+    out.resize(count * maxNearby);
+    for (std::size_t b = 0; b < count && b < bots.size(); ++b)
+    {
+        std::size_t const used = std::min<std::size_t>(bots[b].nearby_count, maxNearby);
+        std::byte const* slot = first + b * maxNearby * stride;
+        if (stride == sizeof(NearbyUnit))
+            std::memcpy(static_cast<void*>(&out[b * maxNearby]), slot, used * sizeof(NearbyUnit));
+        else
+            for (std::size_t i = 0; i < used; ++i)
+                std::memcpy(static_cast<void*>(&out[b * maxNearby + i]), slot + i * stride, sizeof(NearbyUnit));
+    }
+}
+
 } // namespace
 
 struct Tier2Session::Region
@@ -241,10 +258,17 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
     std::uint32_t const maxBots = header.max_bots;
     std::uint32_t const maxNearby = header.max_nearby_units;
 
+    // Nothing new since the last whole copy: the snapshot already held is the answer. A module that polls every few milliseconds while the core
+    // publishes once a world tick (500 ms and more at a few hundred bots) would otherwise copy about 3 MB per poll to read the same tick again.
+    if (haveSnapshot_ && header.published_snapshot_buffer.load(std::memory_order_acquire) <= 1 &&
+        header.published_snapshot_tick.load(std::memory_order_acquire) == lastPublishedTick_)
+        return lastSnapshot_;
+
     // The core writes a snapshot's tick, then its buffer index. A copy is whole when the index and the published tick
     // are the same before and after it: a publish during the copy changes the tick, so two publishes that bring the
     // index back to the same value are still caught. Three attempts. If none is whole, the previous snapshot is kept
-    // rather than a mix of two.
+    // rather than a mix of two. The copy goes into scratch_, which keeps its capacity between reads (no allocation per read), and the two are swapped
+    // when the copy was whole.
     for (int attempt = 0; attempt < 3; ++attempt)
     {
         std::uint8_t const buffer = header.published_snapshot_buffer.load(std::memory_order_acquire);
@@ -255,14 +279,15 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
         std::byte const* bufferBase = region.Base() + region.snapshotOffset + buffer * region.snapshotBytes;
         auto const* snapshot = reinterpret_cast<WorldTickSnapshotHeader const*>(bufferBase);
 
-        WorldTickSnapshotView fresh;
+        WorldTickSnapshotView& fresh = scratch_;
         fresh.tick_number = snapshot->tick_number;
         std::uint32_t const count = std::min(snapshot->bot_count, maxBots);
         CopySection(fresh.bots, bufferBase + region.bots.offset, region.bots.stride, count);
 
-        // Nearby units follow the bot array, maxNearby slots for every bot slot the core allotted.
+        // Nearby units follow the bot array, maxNearby slots for every bot slot the core allotted. Only the first nearby_count of a bot's slots are
+        // read (NearbyOf), so only those are copied; the rest of the slots keep what an earlier tick left there.
         fresh.max_nearby_units = maxNearby;
-        CopySection(fresh.nearby, bufferBase + region.nearby.offset, region.nearby.stride, std::size_t(count) * maxNearby);
+        CopyNearby(fresh.nearby, fresh.bots, bufferBase + region.nearby.offset, region.nearby.stride, count, maxNearby);
 
         // Layout 25: the party views built this tick and their member pool.
         CopySection(fresh.party_views, bufferBase + region.partyViews.offset, region.partyViews.stride,
@@ -273,7 +298,8 @@ WorldTickSnapshotView const& Tier2Session::ReadLatestSnapshot()
         if (header.published_snapshot_buffer.load(std::memory_order_acquire) == buffer &&
             header.published_snapshot_tick.load(std::memory_order_acquire) == tick)
         {
-            lastSnapshot_ = std::move(fresh);
+            std::swap(lastSnapshot_, scratch_);
+            lastPublishedTick_ = tick;
             haveSnapshot_ = true;
             break;
         }

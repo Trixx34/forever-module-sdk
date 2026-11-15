@@ -91,6 +91,8 @@ private:
     struct Region;
     std::unique_ptr<Region> region_;
     WorldTickSnapshotView lastSnapshot_;
+    WorldTickSnapshotView scratch_;        // the copy in progress; swapped with lastSnapshot_ when whole, so both keep their capacity
+    std::uint64_t lastPublishedTick_ = 0;  // the published tick lastSnapshot_ was copied at
     bool haveSnapshot_ = false;
 };
 

@@ -384,6 +384,30 @@ int main()
         CHECK(!session->PublishActions({beyond}, actionError));
     }
 
+    // A read with no new publish keeps the snapshot it holds (no copy, same storage); a new publish is read, and going back to the first buffer reads it again.
+    {
+        auto* header = static_cast<Tier2RegionHeader*>(mapping->get_address());
+        std::string pollError;
+        auto poll = Tier2Session::Attach(name, pollError);
+        CHECK(poll != nullptr);
+        if (poll)
+        {
+            WorldTickSnapshotView const& first = poll->ReadLatestSnapshot();
+            CHECK(first.tick_number == 10 && first.bots.size() == 1);
+            void const* storage = first.bots.data();
+            WorldTickSnapshotView const& again = poll->ReadLatestSnapshot();
+            CHECK(again.bots.data() == storage && again.tick_number == 10 && again.bots.size() == 1);
+            header->published_snapshot_buffer.store(0);
+            header->published_snapshot_tick.store(11);
+            CHECK(poll->ReadLatestSnapshot().bots.empty());
+            header->published_snapshot_buffer.store(1);
+            header->published_snapshot_tick.store(12);
+            WorldTickSnapshotView const& back = poll->ReadLatestSnapshot();
+            CHECK(back.bots.size() == 1 && back.bots[0].guid == 42 && back.NearbyOf(0).size() == back.bots[0].nearby_count);
+            header->published_snapshot_tick.store(10);
+        }
+    }
+
     // A session that has read no snapshot cannot publish: the actions would have no tick to answer. The first whole
     // read then makes it publish-ready.
     {
