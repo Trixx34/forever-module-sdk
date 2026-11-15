@@ -366,6 +366,12 @@ Failures RunLootScenario()
         loot->set_item_class(7);
         loot->set_sell_price(20);
         loot->set_item_name("Tattered Cloth");
+        loot->set_required_level(5);   // the item facts (fields 9 to 14) reach the module
+        loot->set_inventory_type(0);
+        loot->set_bound(false);
+        loot->set_upgrade_score(0);
+        loot->set_usable(true);
+        loot->set_source(0);
         EXPECT_IN(coreFails, WriteEnvelope(socket, out));
 
         // First action: the sale. Heartbeats may arrive in between; skip them.
@@ -453,7 +459,8 @@ Failures RunLootScenario()
         PlayerItemLootedEvent const& loot = notify.player_item_looted();
         if (loot.quality() != 0 || loot.item_class() == 12 || loot.sell_price() == 0)
             return;
-        lootNameOk = loot.item_name() == "Tattered Cloth";
+        lootNameOk = loot.item_name() == "Tattered Cloth" && loot.has_upgrade_score() && loot.required_level() == 5 && loot.usable() &&
+                     loot.has_source() && loot.source() == 0;
         client.SellItem(loot.player_guid(), loot.item_guid(), loot.item_entry(), loot.count(),
                         [&](ActionReply const& reply)
         {
